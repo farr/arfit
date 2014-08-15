@@ -76,6 +76,38 @@ class AR1Posterior(object):
 
         return alphas, betas
 
+    def whitened_residuals(self, p):
+        """Returns a series of residuals that should be independently,
+        :math:`N(0,1)` distributed for the given parameters.
+
+        """
+
+        alphas, betas = self._alphas_betas(p)
+
+        ys = self.samples.copy()
+        ys[1:] = (ys[1:] - alphas*ys[0:-1])/betas[1:]
+        ys[0] = ys[0] / betas[0]
+
+        return ys
+
+    def power_spectrum(self, p, fs):
+        r"""Returns the power spectrum at the indicated frequencies for the
+        AR(1) process represented by the given parameters.  The power
+        spectrum is given by 
+
+        .. math::
+
+          P(f) = \frac{4 \sigma^2 \tau}{4 \pi^2 f^2 \tau^2 + 1}
+
+        """
+
+        p = self.to_params(p)
+
+        sigma = np.exp(p['lnsigma'])
+        tau = np.exp(p['lntau'])
+
+        return 4.0*sigma*sigma*tau/(np.square(2.0*np.pi*tau*fs) + 1)
+
     def log_prior(self, p):
         r"""Returns the log of the prior function on parameters.  The prior is
         uniform in :math:`\ln(\sigma)` and :math:`\ln(\tau)`.
