@@ -1,1 +1,1 @@
-__all__ = ['ar_posterior']
+__all__ = ['ar1_posterior', 'pspec']
