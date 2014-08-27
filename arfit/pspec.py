@@ -6,7 +6,8 @@ def spectrum(ts, data, **kwargs):
     """Produces an estimate of the PSD using Welch's method (see
     :func:`ss.welch` for details).  The time spacing is chosen to be
     the minimum time spacing in ``ts``, and the data are linearly
-    interpolated to this uniform spacing.
+    interpolated to this uniform spacing.  Additional keyword
+    arguments are passed to :func:`ss.welch`.
 
     """
 
