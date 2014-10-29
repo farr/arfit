@@ -53,3 +53,21 @@ def log_likelihood_xs_loop(unsigned int n, unsigned int p, \
     for j in range(n-p, n):
         for k in range(j, n):
             xs[k] += ys[j]*alpha[k-j, j]
+
+def fill_alpha_loop(int n, int p, np.ndarray[np.float_t, ndim=2] alpha, \
+                    np.ndarray[np.float_t, ndim=2] alpha_band):
+    cdef int i
+    cdef int j
+
+    assert alpha.shape[0] == n-p, 'bad alpha.shape[0]'
+    assert alpha.shape[1] == p, 'bad alpha.shape[1]'
+
+    assert alpha_band.shape[0] == p+1, 'bad alpha_band.shape[0]'
+    assert alpha_band.shape[1] == n, 'bad alpha_band.shape[1]'
+
+    for i in range(n):
+        alpha_band[0, i] = 1.0
+
+    for i in range(p, n):
+        for j in range(i-p, i):
+            alpha_band[i-j, j] = -alpha[i-p,j-i+p]

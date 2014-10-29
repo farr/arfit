@@ -161,11 +161,23 @@ def alpha(roots, ts):
     roots = np.atleast_1d(roots)
     ts = np.atleast_1d(ts)
 
-    ts = ts - ts[0]
-    m = np.exp(roots.reshape((-1, 1))*ts[:-1].reshape((1, -1)))
-    b = np.exp(roots.reshape((-1, 1))*ts[-1])
+    n = ts.shape[0]
+    p = roots.shape[0]
 
-    return np.linalg.solve(m, b).squeeze()
+    many_ts = np.zeros((n-p, p+1))
+    for j in range(p+1):
+        many_ts[:,j] = ts[j:n-p+j]
+    
+    m = np.exp(roots.reshape((1, -1, 1))*many_ts[:,:-1].reshape((n-p, 1, -1)))
+    b = np.exp(roots.reshape((1, -1))*many_ts[:, -1].reshape((n-p, 1)))
+
+    return np.real(np.linalg.solve(m,b))
+
+    # ts = ts - ts[0]
+    # m = np.exp(roots.reshape((-1, 1))*ts[:-1].reshape((1, -1)))
+    # b = np.exp(roots.reshape((-1, 1))*ts[-1])
+
+    # return np.linalg.solve(m, b).squeeze()
 
 class BadParameterWarning(Warning):
     """Used to indicate a bad region of parameter space in the likelihood.
@@ -412,7 +424,7 @@ class Posterior(object):
         al.log_likelihood_xs_loop(self.n, self.p, alpha, self.ys, xs)
 
         try:
-            log_evals = np.log(sl.eigvals_banded(beta, lower=False))
+            log_evals = np.log(np.abs(sl.eigvals_banded(beta, lower=False)))
 
             return -0.5*self.n*np.log(2.0*np.pi) - 0.5*np.sum(log_evals) - 0.5*np.dot(xs, sl.solveh_banded(beta, xs, lower=False))
         except sl.LinAlgError:
@@ -437,11 +449,9 @@ class Posterior(object):
         pp = roots.shape[0]
 
         am = np.zeros((pp+1, n))
-        am[0, :] = 1.0
-        for i in range(pp, n):
-            al = alpha(roots, self.ts[(i-pp):i+1])
-            for j in range(0, pp):
-                am[pp-j, i-pp+j] = -al[j]
+        alp = alpha(roots, self.ts)
+
+        al.fill_alpha_loop(n, pp, alp, am)
 
         return am
 
