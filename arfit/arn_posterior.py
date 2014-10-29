@@ -398,9 +398,14 @@ class Posterior(object):
 
     def log_likelihood(self, p):
         p = self.to_params(p)
-        
-        alpha = self._alpha_matrix(p)
-        beta = self._beta_matrix(p, alpha=alpha)
+
+        try:
+            alpha = self._alpha_matrix(p)
+            beta = self._beta_matrix(p, alpha=alpha)
+        except np.linalg.LinAlgError:
+            warnings.warn('exception in alpha/beta computation, probably too-small timescales',
+                          BadParameterWarning)
+            return np.NINF
 
         xs = np.zeros(self.n)
 
@@ -411,6 +416,8 @@ class Posterior(object):
 
             return -0.5*self.n*np.log(2.0*np.pi) - 0.5*np.sum(log_evals) - 0.5*np.dot(xs, sl.solveh_banded(beta, xs, lower=False))
         except sl.LinAlgError:
+            warnings.warn('exception in log-likelihood computation, probably singular cov',
+                          BadParameterWarning)
             return np.NINF
 
     def __call__(self, p):
@@ -458,3 +465,22 @@ class Posterior(object):
         al.beta_matrix_loop(n, pp, alpha, cov, beta)
 
         return beta
+
+    def whitened_residuals(self, p):
+        p = self.to_params(p)
+
+        alpha = self._alpha_matrix(p)
+        beta = self._beta_matrix(p)
+
+        xs = np.zeros(self.n)
+
+        al.log_likelihood_xs_loop(self.n, self.p, alpha, self.ys, xs)
+
+        beta12 = sl.cholesky_banded(beta, lower=False)
+        beta12T = np.zeros(beta12.shape)
+
+        for j in range(self.n):
+            for i in range(j, min(j+self.p, self.n)):
+                beta12T[j-i, j] = beta12[self.p-1-(i-j), i]
+
+        return sl.solve_banded((self.p-1, 0), beta12T, xs)
