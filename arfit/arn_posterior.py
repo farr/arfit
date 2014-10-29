@@ -1,4 +1,6 @@
+import arn_loops as al
 import numpy as np
+import scipy.linalg as sl
 import scipy.stats as ss
 import warnings
 
@@ -67,6 +69,43 @@ def covariance_matrix(roots, ts):
             m -= gi*gj*np.exp(dts*rj)/(ri + rj)
 
     return np.real(m) # Covariance is always real
+
+def banded_covariance(roots, ts):
+    """Returns only the terms in the covariance matrix that one might need
+    to calculate the covariance of the reduced data:
+
+    .. math::
+
+      x_i = y_i - \sum_{k=1}^p \alpha_k y_{i-k}
+
+    Only the upper :math:`p+1` diagonals of the covariance matrix will
+    be returned.
+
+    """
+
+    roots = np.atleast_1d(roots)
+    ts = np.atleast_1d(ts)
+
+    n = ts.shape[0]
+    p = roots.shape[0]
+
+    g = greens_coefficients(roots)
+
+    dts = np.zeros((2*p+1, n))
+    for i in range(1, 2*p+1):
+        j = 2*p - i
+        dts[j, i:] = np.abs(ts[:-i] - ts[i:])
+
+    m = np.zeros(dts.shape, dtype=roots.dtype)
+
+    for ri, gi in zip(roots, g):
+        for rj, gj in zip(roots, g):
+            m -= gi*gj*np.exp(dts*rj)/(ri + rj)
+            
+    for i in range(2*p):
+        m[i, :(2*p-i)] = 0.0
+
+    return np.real(m)
 
 def generate_data(sigma, roots, ts):
     r"""Returns a sample from the stochastic process described by
@@ -164,6 +203,10 @@ class Posterior(object):
     @property
     def p(self):
         return self._p
+
+    @property
+    def n(self):
+        return self.ts.shape[0]
 
     @property
     def nc(self):
@@ -338,7 +381,7 @@ class Posterior(object):
         else:
             return np.real(self._complex_roots_log_prior(roots[:self.nc], tau_min, tau_max) + self._real_roots_log_prior(roots[self.nc:], tau_min, tau_max) + self.roots_log_jacobian(p, roots))
 
-    def log_likelihood(self, p):
+    def full_log_likelihood(self, p):
         p = self.to_params(p)
         roots = self.roots(p)
 
@@ -353,6 +396,23 @@ class Posterior(object):
                           BadParameterWarning)
             return np.NINF
 
+    def log_likelihood(self, p):
+        p = self.to_params(p)
+        
+        alpha = self._alpha_matrix(p)
+        beta = self._beta_matrix(p, alpha=alpha)
+
+        xs = np.zeros(self.n)
+
+        al.log_likelihood_xs_loop(self.n, self.p, alpha, self.ys, xs)
+
+        try:
+            log_evals = np.log(sl.eigvals_banded(beta, lower=False))
+
+            return -0.5*self.n*np.log(2.0*np.pi) - 0.5*np.sum(log_evals) - 0.5*np.dot(xs, sl.solveh_banded(beta, xs, lower=False))
+        except sl.LinAlgError:
+            return np.NINF
+
     def __call__(self, p):
         lp = self.log_prior(p)
 
@@ -360,5 +420,41 @@ class Posterior(object):
             return lp
         else:
             return lp + self.log_likelihood(p)
-        
-        
+
+    def _alpha_matrix(self, p):
+        p = self.to_params(p)
+
+        roots = self.roots(p)
+
+        n = self.ts.shape[0]
+        pp = roots.shape[0]
+
+        am = np.zeros((pp+1, n))
+        am[0, :] = 1.0
+        for i in range(pp, n):
+            al = alpha(roots, self.ts[(i-pp):i+1])
+            for j in range(0, pp):
+                am[pp-j, i-pp+j] = -al[j]
+
+        return am
+
+    def _beta_matrix(self, p, alpha=None):
+        p = self.to_params(p)
+
+        sigma = np.exp(p['log_sigma'])
+
+        roots = self.roots(p)
+
+        n = self.ts.shape[0]
+        pp = roots.shape[0]
+
+        if alpha is None:
+            alpha = self._alpha_matrix(p)
+
+        cov = sigma*sigma*banded_covariance(self.roots(p), self.ts)
+
+        beta = np.zeros((pp, n))
+
+        al.beta_matrix_loop(n, pp, alpha, cov, beta)
+
+        return beta
