@@ -8,3 +8,11 @@ ARFit Package
    :members:
    :undoc-members:
    :show-inheritance:
+
+:mod:`arn_posterior` Module
+---------------------------
+
+.. automodule:: arfit.arn_posterior
+   :members:
+   :undoc-members:
+   :show-inheritance:

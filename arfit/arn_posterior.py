@@ -4,7 +4,42 @@ import scipy.linalg as sl
 import scipy.stats as ss
 import warnings
 
-"""A general, slow model of CAR(n) processes.
+r"""A model based on CAR processes for fitting the properties of noise.
+Our model is that the measured noise, :math:`y_i = y\left( t_i
+\right)` obeys the stochastic differential equation 
+
+.. math::
+
+  \left[ \prod_{i = 1}^p \frac{d}{dt} - r_i \right] y(t) = \eta(t)
+
+where :math:`\eta(t)` is a white-noise process with 
+
+.. math::
+
+  \left\langle \eta(t) \right \rangle = 0
+
+and 
+
+.. math::
+
+  \left\langle \eta(t) \eta(t') \right\rangle = \sigma^2 \delta(t-t')
+
+The parameters of our model are the p "roots" :math:`r_i` and the
+noise amplitude :math:`\sigma`.  We use the measured times and values
+:math:`y_i = y(t_i)` to constrain these parameters.  Note that the
+roots can be complex, but if so must occur in complex-conjugate pairs
+so that the noise remains real.
+
+The roots have dimensions of inverse time, and correspond to the
+reciprocal of the decay timescale of an eigenmode of the process (real
+part) and/or to an angular frequency of an eigenmode of the process
+(imaginary part).
+
+The power spectrum of the noise process described by our model is 
+
+.. math::
+
+  \left\langle \tilde{y}(f) \tilde{y}(f') \right\rangle = \frac{\sigma^2}{\prod_{j=1}^p \left| 2 \pi i f - r_j \right|^2} \delta(f - f')
 
 """
 
@@ -206,34 +241,79 @@ class Posterior(object):
 
     @property
     def ts(self):
+        """Sample times.
+
+        """
         return self._ts
 
     @property
     def ys(self):
+        """Sample values
+
+        """
         return self._ys
 
     @property
     def p(self):
+        """The order of the CAR process.
+
+        """
         return self._p
 
     @property
     def n(self):
+        """The number of data points.
+
+        """
         return self.ts.shape[0]
 
     @property
     def nc(self):
+        """The number of complex roots (should always be even).
+
+        """
         return self._nc
 
     @property
     def dtype(self):
+        """A named-field data type for model parameters.
+
+        """
         return np.dtype([('log_sigma', np.float),
                          ('root_params', np.float, self.p)])
 
     @property
     def nparams(self):
+        """The number of parameters in the model.
+
+        """
         return 1 + self.p
 
     def to_params(self, p):
+        r"""Returns a view of ``p`` with named fields for the parameters.  Our
+        parameterisation uses :math:`\log \sigma` and treats the roots
+        as follows.  For the real roots, the roots are sorted from
+        smallest to largest, and 
+
+        .. math::
+
+          p_0 = - \log\left( -r_0 \right)
+
+        .. math::
+
+          p_i = \log\left( r_i - r_{i-1} \right) - \log\left( -r_i \right)
+
+        In this way, :math:`-\infty < p_j < \infty` generates all
+        possible sorted sets of negative roots.
+
+        We use the same parameterisation for the real parts of the
+        complex roots.  For the imaginary parts, we use the log of the
+        positive angular frequency as a parameter, again generating
+        all possible complex conjugate pairs of roots (sorted in
+        increasing order of real part) as the parameters range over
+        the real line.
+
+        """
         return np.atleast_1d(p).view(self.dtype).squeeze()
 
     def _real_roots(self, rp):
@@ -378,6 +458,26 @@ class Posterior(object):
             return -np.sum(np.log(-rroots))
 
     def log_prior(self, p):
+        r"""The prior on parameters.  Our prior is flat in :math:`\log \sigma`,
+        and flat in :math:`\log r_i` (or :math:`\log \Re r_i` and
+        :math:`\log \Im r_i` if complex) between 
+
+        .. math::
+
+          r_\mathrm{min} = \frac{1}{10T}
+
+        and 
+
+        .. math:
+
+          r_\mathrm{max} = \frac{10}{\delta t_\mathrm{min}}
+
+        where :math:`T` is the total observation time and
+        :math:`\delta t_\mathrm{min}` is the smallest time spacing
+        between samples.
+
+        """
+
         p = self.to_params(p)
 
         # Flat in log_sigma
@@ -394,6 +494,12 @@ class Posterior(object):
             return np.real(self._complex_roots_log_prior(roots[:self.nc], tau_min, tau_max) + self._real_roots_log_prior(roots[self.nc:], tau_min, tau_max) + self.roots_log_jacobian(p, roots))
 
     def full_log_likelihood(self, p):
+        """Returns the log-likelihood for the data under the model by
+        explicitly constructing the data covariance matrix.  This is
+        foolproof, but very slow, and so probably only useful for
+        testing.
+
+        """
         p = self.to_params(p)
         roots = self.roots(p)
 
@@ -409,6 +515,10 @@ class Posterior(object):
             return np.NINF
 
     def log_likelihood(self, p):
+        """Returns the log-likelihood of the data under the model, but
+        efficiently.
+
+        """
         p = self.to_params(p)
 
         try:
@@ -433,6 +543,9 @@ class Posterior(object):
             return np.NINF
 
     def __call__(self, p):
+        """Returns the log-posterior at parameters ``p``.
+
+        """
         lp = self.log_prior(p)
 
         if lp == np.NINF:
@@ -477,6 +590,11 @@ class Posterior(object):
         return beta
 
     def whitened_residuals(self, p):
+        r"""Returns an array of the same shape as the input data, but whose
+        values are indepenent :math:`N(0,1)` variables under the model
+        with parameters ``p``.
+
+        """
         p = self.to_params(p)
 
         alpha = self._alpha_matrix(p)
@@ -494,3 +612,18 @@ class Posterior(object):
                 beta12T[j-i, j] = beta12[self.p-1-(i-j), i]
 
         return sl.solve_banded((self.p-1, 0), beta12T, xs)
+
+    def power_spectrum(self, p, fs):
+        r"""The power spectrum for the model with parameters ``p`` at the
+        frequencies ``fs``.
+
+        .. math::
+
+          \left\langle \tilde{y}(f) \tilde{y}(f') \right\rangle = \frac{\sigma^2}{\prod_{j=1}^p \left| 2 \pi i f - r_j \right|^2} \delta(f - f')
+
+        """
+        p = self.to_params(p)
+
+        roots = self.roots(p)
+
+        return np.exp(2.0*p['log_sigma'])/np.prod(np.square(np.abs(2.0*np.pi*1j*fs.reshape((-1, 1)) - roots.reshape((1, -1)))), axis=1)
