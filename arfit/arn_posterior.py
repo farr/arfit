@@ -202,17 +202,12 @@ def alpha(roots, ts):
     many_ts = np.zeros((n-p, p+1))
     for j in range(p+1):
         many_ts[:,j] = ts[j:n-p+j]
+    many_ts = many_ts - many_ts[:,0].reshape((-1, 1))
     
     m = np.exp(roots.reshape((1, -1, 1))*many_ts[:,:-1].reshape((n-p, 1, -1)))
     b = np.exp(roots.reshape((1, -1))*many_ts[:, -1].reshape((n-p, 1)))
 
     return np.real(np.linalg.solve(m,b))
-
-    # ts = ts - ts[0]
-    # m = np.exp(roots.reshape((-1, 1))*ts[:-1].reshape((1, -1)))
-    # b = np.exp(roots.reshape((-1, 1))*ts[-1])
-
-    # return np.linalg.solve(m, b).squeeze()
 
 class BadParameterWarning(Warning):
     """Used to indicate a bad region of parameter space in the likelihood.
@@ -534,7 +529,13 @@ class Posterior(object):
         al.log_likelihood_xs_loop(self.n, self.p, alpha, self.ys, xs)
 
         try:
-            log_evals = np.log(np.abs(sl.eigvals_banded(beta, lower=False)))
+            evals = sl.eigvals_banded(beta, lower=False)
+            if np.any(evals <= 0):
+                warnings.warn('found non-positive-definite transformed covariance',
+                              BadParameterWarning)
+                return np.NINF
+
+            log_evals = np.log(evals)
 
             return -0.5*self.n*np.log(2.0*np.pi) - 0.5*np.sum(log_evals) - 0.5*np.dot(xs, sl.solveh_banded(beta, xs, lower=False))
         except sl.LinAlgError:
@@ -629,8 +630,23 @@ class Posterior(object):
         return np.exp(2.0*p['log_sigma'])/np.prod(np.square(np.abs(2.0*np.pi*1j*fs.reshape((-1, 1)) - roots.reshape((1, -1)))), axis=1)
 
     def residuals(self, p):
-        """Returns the error in the CAR prediction of each :math:`y_i` divided
-        by the standard deviation of this quantity.
+        r"""Returns ``x, sigma``, where 
+
+        .. math::
+
+          x_i = y_i - \sum_{k=1}^p \alpha_{ik} y_{i-k}
+
+        is the error in the model prediction for :math:`y_i` and 
+
+        .. math::
+
+          \sigma_i^2 = \mathrm{var}\left( x_i \right)
+
+        is the variance of this quantity predicted by the model.  Note
+        that the :math:`x_i` are not statistically independent, so one
+        should not, e.g., form a chi-squared out of these quantities.
+        For independent residuals, see the
+        :method:`Posterior.whitened_residuals` method.
 
         """
 
@@ -643,4 +659,4 @@ class Posterior(object):
 
         al.log_likelihood_xs_loop(self.n, self.p, alpha, self.ys, xs)
 
-        return xs / np.sqrt(beta[-1,:])
+        return xs, np.sqrt(beta[-1,:])
