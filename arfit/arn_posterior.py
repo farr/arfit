@@ -627,3 +627,20 @@ class Posterior(object):
         roots = self.roots(p)
 
         return np.exp(2.0*p['log_sigma'])/np.prod(np.square(np.abs(2.0*np.pi*1j*fs.reshape((-1, 1)) - roots.reshape((1, -1)))), axis=1)
+
+    def residuals(self, p):
+        """Returns the error in the CAR prediction of each :math:`y_i` divided
+        by the standard deviation of this quantity.
+
+        """
+
+        p = self.to_params(p)
+
+        alpha = self._alpha_matrix(p)
+        beta = self._beta_matrix(p)
+
+        xs = np.zeros(self.n)
+
+        al.log_likelihood_xs_loop(self.n, self.p, alpha, self.ys, xs)
+
+        return xs / np.sqrt(beta[-1,:])
