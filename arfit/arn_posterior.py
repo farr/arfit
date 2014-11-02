@@ -211,6 +211,33 @@ def alpha(roots, ts):
 
     return np.real(np.linalg.solve(m,b))
 
+def variance(roots):
+    r"""Returns the variance of the stochastic process 
+
+    .. math::
+
+      \prod_i \left[ \frac{d}{dt} - r_i \right] y(t) = \eta(t)
+
+    with 
+
+    .. math::
+
+      \left\langle \eta(t) \eta(t') \right\rangle = \delta(t-t')
+
+    """
+
+    roots = np.atleast_1d(roots)
+
+    g = greens_coefficients(roots)
+
+    m = 0.0
+    for ri, gi in zip(roots, g):
+        for rj, gj in zip(roots, g):
+            m -= gi*gj/(ri + rj)
+
+    return np.real(m) # Variance is always real
+    
+
 class BadParameterWarning(Warning):
     """Used to indicate a bad region of parameter space in the likelihood.
 
@@ -661,3 +688,73 @@ class Posterior(object):
         al.log_likelihood_xs_loop(self.n, self.p, alpha, self.ys, xs)
 
         return xs, np.sqrt(beta[-1,:])
+
+    def frequency_parameters(self, p):
+        r"""Returns an array of more physically meaningful parameters, 
+
+        .. math::
+
+          \left\{ \sigma, \Re r_0, \Im r_0, \Re r_2, \Im r_2, \ldots,
+          r_{N_c}, \ldots \right\}
+
+        where :math:`\sigma` is the standard deviation of the process,
+        and the following :math:`2N_c` values are the real (decay
+        rate) and imaginary (oscillation frequency) parts of the
+        complex roots, followed by the real roots (decay rate).
+
+        """
+
+        p = self.to_params(p)
+
+        roots = self.roots(p)
+
+        sigma = np.exp(p['log_sigma'])*np.sqrt(variance(self.roots(p)))
+
+        if self.nc == 0:
+            return np.concatenate(([sigma], roots))
+        elif self.nc == self.p:
+            rp = np.zeros(self.nparams)
+            rp[0] = sigma
+            rp[1::2] = np.real(roots)
+            rp[2::2] = np.imag(roots)
+
+            return rp
+        else:
+            rp = np.zeros(self.nparams)
+            rp[0] = sigma
+            rp[1:nc:2] = np.real(roots[:nc:2])
+            rp[2:nc:2] = np.imag(roots[:nc:2])
+            rp[nc:] = np.real(roots[nc:])
+
+            return rp
+
+    def time_parameters(self, p):
+        r"""Returns an array of more physically meaningful parameters, 
+
+        .. math::
+
+          \left\{ \sigma, 1/\Re r_0, 2\pi/\Im r_0, 1/\Re r_2, 2\pi/\Im
+          r_2, \ldots, 1/r_{N_c}, \ldots \right\}
+
+        where :math:`\sigma` is the standard deviation of the process,
+        and the following :math:`2N_c` values are the inverse of the
+        real (decay timescale) and imaginary (oscillation period)
+        parts of the complex roots, followed by the real roots (decay
+        timescale)."""
+
+        rp = self.frequency_parameters(p)
+
+        if self.nc == 0:
+            rp[1:] = 1.0/rp[1:]
+            return rp
+        elif self.nc == self.p:
+            rp[1::2] = -1.0/rp[1::2]
+            rp[2::2] = 2.0*np.pi/rp[2::2]
+
+            return rp
+        else:
+            rp[1:nc:2] = -1.0/rp[1:nc:2]
+            rp[2:nc:2] = 2.0*np.pi/rp[2:nc:2]
+            rp[nc:] = -1.0/rp[nc:]
+
+            return rp
