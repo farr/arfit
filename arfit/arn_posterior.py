@@ -745,7 +745,7 @@ class Posterior(object):
         rp = self.frequency_parameters(p)
 
         if self.nc == 0:
-            rp[1:] = 1.0/rp[1:]
+            rp[1:] = -1.0/rp[1:]
             return rp
         elif self.nc == self.p:
             rp[1::2] = -1.0/rp[1::2]
