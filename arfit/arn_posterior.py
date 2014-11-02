@@ -207,6 +207,8 @@ def alpha(roots, ts):
     m = np.exp(roots.reshape((1, -1, 1))*many_ts[:,:-1].reshape((n-p, 1, -1)))
     b = np.exp(roots.reshape((1, -1))*many_ts[:, -1].reshape((n-p, 1)))
 
+    m[:,:,:p] += 1e-8*np.eye(p) # Stabilise in the presence of long gaps
+
     return np.real(np.linalg.solve(m,b))
 
 class BadParameterWarning(Warning):
@@ -606,11 +608,10 @@ class Posterior(object):
         al.log_likelihood_xs_loop(self.n, self.p, alpha, self.ys, xs)
 
         beta12 = sl.cholesky_banded(beta, lower=False)
-        beta12T = np.zeros(beta12.shape)
+        beta12T = np.zeros((self.p, self.n))
 
-        for j in range(self.n):
-            for i in range(j, min(j+self.p, self.n)):
-                beta12T[j-i, j] = beta12[self.p-1-(i-j), i]
+        for i in range(self.p):
+            beta12T[-(i+1), :self.n-self.p+1+i] = beta12[i, self.p-1-i:]
 
         return sl.solve_banded((self.p-1, 0), beta12T, xs)
 
