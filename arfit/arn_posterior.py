@@ -715,8 +715,8 @@ class Posterior(object):
         elif self.nc == self.p:
             rp = np.zeros(self.nparams)
             rp[0] = sigma
-            rp[1::2] = np.real(roots)
-            rp[2::2] = np.imag(roots)
+            rp[1::2] = np.real(roots[::2])
+            rp[2::2] = np.imag(roots[::2])
 
             return rp
         else:
