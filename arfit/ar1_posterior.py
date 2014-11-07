@@ -106,7 +106,7 @@ class AR1Posterior(object):
         sigma = np.exp(p['lnsigma'])
         tau = np.exp(p['lntau'])
 
-        return 4.0*sigma*sigma*tau/(np.square(2.0*np.pi*tau*fs) + 1)
+        return 4.0*sigma*sigma*tau*tau/(np.square(2.0*np.pi*tau*fs) + 1)
 
     def log_prior(self, p):
         r"""Returns the log of the prior function on parameters.  The prior is
