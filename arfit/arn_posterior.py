@@ -504,12 +504,20 @@ class Posterior(object):
 
         p = self.to_params(p)
 
-        # Flat in log_sigma
+        roots = self.roots(p)
+        
+        unit_std = np.sqrt(covariance_matrix(roots, [0.0, 1.0])[0,0])
+        sigma_max = (np.max(self.ys) - np.min(self.ys))/unit_std
+        sigma_min = np.min(np.abs(np.diff(self.ys)))/unit_std
+
+        sigma = np.exp(p['log_sigma'])
+        
+        if sigma < sigma_min or sigma > sigma_max:
+            return np.NINF
+        
         tau_min = np.min(np.diff(self.ts))/10.0
         tau_max = (self.ts[-1] - self.ts[0])*10.0
 
-        roots = self.roots(p)
-        
         if self.nc == 0:
             return self._real_roots_log_prior(roots, tau_min, tau_max) + self.roots_log_jacobian(p, roots)
         elif self.nc == self.p:
