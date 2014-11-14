@@ -470,7 +470,7 @@ class Posterior(object):
            np.any(np.abs(np.imag(croots)) > omega_max):
             return np.NINF
         else:
-            return -0.5*np.sum(np.log(np.abs(np.real(croots[::2])))) - 0.5*np.sum(np.log(np.abs(np.imag(croots[1::2]))))
+            return -np.sum(np.log(np.abs(np.real(croots[::2])))) - np.sum(np.log(np.abs(np.imag(croots[1::2]))))
 
     def _real_roots_log_prior(self, rroots, tau_min, tau_max):
         root_min = -1.0 / tau_min
