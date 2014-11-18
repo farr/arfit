@@ -6,9 +6,9 @@ class AR1Posterior(object):
 
     .. math::
 
-      x_{i+1} = \alpha_i x_i + \beta_i \epsilon
+      x_{i+1} - \mu = \alpha_i \left(x_i - \mu\right) + \beta_i \epsilon
 
-    with :math:`\epsilon \sim N(0,1)` and :math:`\alpha_i` and
+    with :math:`\epsilon \sim N(0,1)`, :math:`\alpha_i` and
     :math:`\beta_i` chosen so that the process has a consistent ACF,
     given by 
 
@@ -41,16 +41,32 @@ class AR1Posterior(object):
         return self._samples
 
     @property
+    def ys(self):
+        """Synonym for ``samples``."""
+        return self.samples
+    
+    @property
     def dtype(self):
         """Returns a data type appropriate for parameters.  See :meth:`to_params`.
 
         """
-        return np.dtype([('lnsigma', np.float), ('lntau', np.float)])
+        return np.dtype([('mu', np.float), ('lnsigma', np.float),
+                         ('lntau', np.float)])
+
+    @property
+    def nparams(self):
+        """Returns the number of parameters.
+
+        """
+        return 3
 
     def to_params(self, p):
         r"""Returns a view of the array ``p`` that corresponds to a
         parameterization of the AR(1) process.  There are two
         parameter names:
+
+        ``mu``
+          The mean of the process.
 
         ``lnsigma``
           The natural log of :math:`\sigma`
@@ -81,10 +97,11 @@ class AR1Posterior(object):
         :math:`N(0,1)` distributed for the given parameters.
 
         """
+        p = self.to_params(p)
 
         alphas, betas = self._alphas_betas(p)
 
-        ys = self.samples.copy()
+        ys = self.samples.copy() - p['mu']
         ys[1:] = (ys[1:] - alphas*ys[0:-1])/betas[1:]
         ys[0] = ys[0] / betas[0]
 
@@ -123,9 +140,10 @@ class AR1Posterior(object):
         number of data samples.
 
         """
+        p = self.to_params(p)
         alphas, betas = self._alphas_betas(p)
 
-        ys = self.samples.copy()
+        ys = self.samples.copy() - p['mu']
         ys[1:] = (ys[1:] - alphas*ys[0:-1])/betas[1:]
         ys[0] = ys[0] / betas[0]
         
@@ -143,11 +161,11 @@ class AR1Posterior(object):
         """Returns a draw of data from the model with parameters p.
 
         """
-
+        p = self.to_params(p)
         alphas, betas = self._alphas_betas(p)
 
         ys = [np.random.randn(1)*betas[0]]
         for a,b in zip(alphas, betas[1:]):
             ys.append(a*ys[-1] + b*np.random.randn(1))
 
-        return np.array(ys).squeeze()
+        return np.array(ys).squeeze() + p['mu']

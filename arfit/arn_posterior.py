@@ -5,8 +5,8 @@ import scipy.stats as ss
 import warnings
 
 r"""A model based on CAR processes for fitting the properties of noise.
-Our model is that the measured noise, :math:`y_i = y\left( t_i
-\right)` obeys the stochastic differential equation 
+Our model is that the measured zero-mean noise, :math:`y_i = y\left(
+t_i \right) - \mu` obeys the stochastic differential equation
 
 .. math::
 
@@ -24,11 +24,11 @@ and
 
   \left\langle \eta(t) \eta(t') \right\rangle = \sigma^2 \delta(t-t')
 
-The parameters of our model are the p "roots" :math:`r_i` and the
-noise amplitude :math:`\sigma`.  We use the measured times and values
-:math:`y_i = y(t_i)` to constrain these parameters.  Note that the
-roots can be complex, but if so must occur in complex-conjugate pairs
-so that the noise remains real.
+The parameters of our model are the p "roots" :math:`r_i`, the noise
+amplitude :math:`\sigma`, and the mean :math:`\mu`.  We use the
+measured times and values :math:`y_i = y(t_i) - \mu` to constrain
+these parameters.  Note that the roots can be complex, but if so must
+occur in complex-conjugate pairs so that the noise remains real.
 
 The roots have dimensions of inverse time, and correspond to the
 reciprocal of the decay timescale of an eigenmode of the process (real
@@ -303,7 +303,8 @@ class Posterior(object):
         """A named-field data type for model parameters.
 
         """
-        return np.dtype([('log_sigma', np.float),
+        return np.dtype([('mu', np.float),
+                         ('log_sigma', np.float),
                          ('root_params', np.float, self.p)])
 
     @property
@@ -311,7 +312,7 @@ class Posterior(object):
         """The number of parameters in the model.
 
         """
-        return 1 + self.p
+        return 2 + self.p
 
     def to_params(self, p):
         r"""Returns a view of ``p`` with named fields for the parameters.  Our
@@ -504,6 +505,10 @@ class Posterior(object):
 
         p = self.to_params(p)
 
+        # Flat prior on the mean between min and max
+        if p['mu'] < np.min(self.ys) or p['mu'] > np.max(self.ys):
+            return np.NINF
+        
         roots = self.roots(p)
         
         unit_std = np.sqrt(covariance_matrix(roots, [0.0, 1.0])[0,0])
@@ -540,7 +545,7 @@ class Posterior(object):
         cov = sigma*sigma*covariance_matrix(roots, self.ts)
 
         try:
-            return ss.multivariate_normal.logpdf(self.ys, np.zeros(self.ys.shape[0]), cov)
+            return ss.multivariate_normal.logpdf(self.ys-p['mu'], np.zeros(self.ys.shape[0]), cov)
         except:
             warnings.warn('exception in multivariate_normal (probably singular cov)',
                           BadParameterWarning)
@@ -563,7 +568,7 @@ class Posterior(object):
 
         xs = np.zeros(self.n)
 
-        al.log_likelihood_xs_loop(self.n, self.p, alpha, self.ys, xs)
+        al.log_likelihood_xs_loop(self.n, self.p, alpha, self.ys - p['mu'], xs)
 
         try:
             evals = sl.eigvals_banded(beta, lower=False)
@@ -640,7 +645,7 @@ class Posterior(object):
 
         xs = np.zeros(self.n)
 
-        al.log_likelihood_xs_loop(self.n, self.p, alpha, self.ys, xs)
+        al.log_likelihood_xs_loop(self.n, self.p, alpha, self.ys - p['mu'], xs)
 
         beta12 = sl.cholesky_banded(beta, lower=False)
         beta12T = np.zeros((self.p, self.n))
@@ -693,7 +698,7 @@ class Posterior(object):
 
         xs = np.zeros(self.n)
 
-        al.log_likelihood_xs_loop(self.n, self.p, alpha, self.ys, xs)
+        al.log_likelihood_xs_loop(self.n, self.p, alpha, self.ys - p['mu'], xs)
 
         return xs, np.sqrt(beta[-1,:])
 
