@@ -30,7 +30,7 @@ if __name__ == '__main__':
     parser.add_argument('--q', required=True, type=int, help='MA(q)')
     
     parser.add_argument('--thin', default=100, type=int, help='thin parameter (default %(default)s)')
-    parser.add_argument('--save', default=10000, type=int, help='steps between save (default %(default)s)')
+    parser.add_argument('--save', default=1000, type=int, help='steps between save (default %(default)s)')
 
     parser.add_argument('--temps', default=8, type=int, help='number of temperatures (default %(default)s)')
     parser.add_argument('--walkers', default=128, type=int, help='number of walkers (default %(default)s)')
