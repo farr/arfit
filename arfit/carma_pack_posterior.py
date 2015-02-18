@@ -300,3 +300,19 @@ class Posterior(object):
 
         self._carma_process = cm.run_mcmc_carma(1, 25, self._tv, self._yv, self._dyv, self.p, self.q, 10, False, 1)
         self._carma_process.SetMLE(True)
+
+    def power_spectrum(self, fs, p):
+        p = self.to_params(p)
+
+        ar_roots = self._quad_to_roots(p['log_quad_p'])
+        ma_roots = self._quad_to_roots(p['log_quad_q'])
+
+        ar_coefs = np.real(np.poly(ar_roots))
+
+        ma_coefs = np.real(np.poly(ma_roots))
+        ma_coefs /= ma_coefs[-1]
+        ma_coefs = ma_coefs[::-1]
+
+        sigma = np.exp(p['log_sigma']) / np.sqrt(cm.carma_variance(1.0, ar_roots, ma_coefs))
+
+        return cm.power_spectrum(fs, sigma, ar_coefs, ma_coefs)
