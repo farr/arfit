@@ -70,12 +70,12 @@ def greens_coefficients(roots):
 
     return np.linalg.solve(m, b)
 
-def covariance_matrix(roots, ts):
+def covariance_matrix(roots, ts, beta_roots = None):
     r"""Returns the covariance matrix of the stochastic solution to the ODE
 
     .. math::
 
-      \left[ \prod_i \frac{d}{dt} - r_i \right] y(t) = \eta(t),
+      \left[ \prod_i \frac{d}{dt} - r_i \right] y(t) = \left[ \prod_j \frac{d}{dt} - b_j \right] \frac{1}{\prod_j -b_j} \eta(t),
 
     with 
 
@@ -93,19 +93,27 @@ def covariance_matrix(roots, ts):
     roots = np.atleast_1d(roots)
     ts = np.atleast_1d(ts)
 
-    g = greens_coefficients(roots)
+    gc = greens_coefficients(roots)
+
+    if beta_roots is None:
+        gg = gc
+    else:
+        gg = []
+        for g, r in zip(gc, roots):
+            gg.append(g*np.prod(r - beta_roots)/np.prod(-beta_roots))
+        gg = np.array(gg)
 
     dts = np.abs(ts.reshape((-1, 1)) - ts.reshape((1, -1)))
 
     m = np.zeros(dts.shape, dtype=roots.dtype)
 
-    for ri, gi in zip(roots, g):
-        for rj, gj in zip(roots, g):
+    for ri, gi in zip(roots, gg):
+        for rj, gj in zip(roots, gg):
             m -= gi*gj*np.exp(dts*rj)/(ri + rj)
 
     return np.real(m) # Covariance is always real
 
-def banded_covariance(roots, ts):
+def banded_covariance(roots, ts, beta_roots = None):
     """Returns only the terms in the covariance matrix that one might need
     to calculate the covariance of the reduced data:
 
@@ -124,8 +132,16 @@ def banded_covariance(roots, ts):
     n = ts.shape[0]
     p = roots.shape[0]
 
-    g = greens_coefficients(roots)
+    gc = greens_coefficients(roots)
 
+    if beta_roots is None:
+        gg = gc
+    else:
+        gg = []
+        for g, r in zip(gc, roots):
+            gg.append(g*np.prod(r - beta_roots)/np.prod(-beta_roots))
+        gg = np.array(gg)        
+    
     dts = np.zeros((2*p+1, n))
     for i in range(1, 2*p+1):
         j = 2*p - i
@@ -133,8 +149,8 @@ def banded_covariance(roots, ts):
 
     m = np.zeros(dts.shape, dtype=roots.dtype)
 
-    for ri, gi in zip(roots, g):
-        for rj, gj in zip(roots, g):
+    for ri, gi in zip(roots, gg):
+        for rj, gj in zip(roots, gg):
             m -= gi*gj*np.exp(dts*rj)/(ri + rj)
             
     for i in range(2*p):
@@ -142,12 +158,12 @@ def banded_covariance(roots, ts):
 
     return np.real(m)
 
-def generate_data(sigma, roots, ts):
+def generate_data(sigma, roots, ts, beta_roots = None):
     r"""Returns a sample from the stochastic process described by
 
     .. math::
 
-      \left[ \prod_i \frac{d}{dt} - r_i \right] y(t) = \sigma \eta(t)
+      \left[ \prod_i \frac{d}{dt} - r_i \right] y(t) = \sigma \left[ \prod_j \frac{d}{dt} - b_j \right] \frac{1}{\prod_j -b_j} \eta(t)
 
     with 
 
@@ -161,11 +177,11 @@ def generate_data(sigma, roots, ts):
 
     ts = np.atleast_1d(ts)
 
-    m = covariance_matrix(roots, ts)*sigma*sigma
+    m = covariance_matrix(roots, ts, beta_roots)*sigma*sigma
 
     return np.random.multivariate_normal(np.zeros(ts.shape[0]), m)
 
-def psd(sigma, roots, fs):
+def psd(sigma, roots, fs, beta_roots = None):
     r"""Returns the power spectral density of the stochastic process
 
     .. math::
@@ -182,7 +198,14 @@ def psd(sigma, roots, fs):
     denom = np.abs(denom)
     denom = denom*denom
 
-    return sigma*sigma/denom
+    if beta_roots is None:
+        numer = 1.0
+    else:
+        numer = np.prod(2.0*np.pi*1j*fs.reshape((-1, 1)) - beta_roots.reshape((1, -1)), axis=1) / np.prod(-beta_roots)
+        numer = np.abs(numer)
+        numer = numer*numer
+
+    return sigma*sigma*numer/denom
 
 def alpha(roots, ts):
     r"""Returns the weights in the difference equation that the homogeneous
@@ -211,7 +234,7 @@ def alpha(roots, ts):
 
     return np.real(np.linalg.solve(m,b))
 
-def variance(roots):
+def variance(roots, beta_roots = None):
     r"""Returns the variance of the stochastic process 
 
     .. math::
@@ -228,11 +251,19 @@ def variance(roots):
 
     roots = np.atleast_1d(roots)
 
-    g = greens_coefficients(roots)
+    gc = greens_coefficients(roots)
+
+    if beta_roots is None:
+        gg = gc
+    else:
+        gg = []
+        for g, r in zip(gc, roots):
+            gg.append(g*np.prod(r - beta_roots)/np.prod(-beta_roots))
+        gg = np.array(gg)        
 
     m = 0.0
-    for ri, gi in zip(roots, g):
-        for rj, gj in zip(roots, g):
+    for ri, gi in zip(roots, gg):
+        for rj, gj in zip(roots, gg):
             m -= gi*gj/(ri + rj)
 
     return np.real(m) # Variance is always real
@@ -250,7 +281,7 @@ class Posterior(object):
 
     """
 
-    def __init__(self, ts, ys, p, ncomplex=0):
+    def __init__(self, ts, ys, p, q = 1, ncomplex=0):
         """Initialise the posterior with the given times and data.  If given,
         ``ncomplex`` indicates the number of complex roots
         (i.e. oscillatory components) in the process.  ``p`` is the
@@ -261,6 +292,7 @@ class Posterior(object):
         self._ts = ts
         self._ys = ys
         self._p = p
+        self._q = q
         self._nc = ncomplex
 
     @property
@@ -284,6 +316,13 @@ class Posterior(object):
         """
         return self._p
 
+    @property
+    def q(self):
+        """The order of the MA part of the process.
+
+        """
+        return self._q
+    
     @property
     def n(self):
         """The number of data points.
