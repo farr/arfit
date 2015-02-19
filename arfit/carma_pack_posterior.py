@@ -334,3 +334,31 @@ class Posterior(object):
         sigma = np.exp(p['log_sigma']) / np.sqrt(cm.carma_variance(1.0, ar_roots, ma_coefs))
 
         return cm.power_spectrum(fs, sigma, ar_coefs, ma_coefs)
+
+    def standardised_residuals(self, p):
+        p = self.to_params(p)
+
+        ar_roots = self.ar_roots(p)
+        ma_coefs = self.ma_poly(p)
+
+        sigma = np.exp(p['log_sigma']) / np.sqrt(cm.carma_variance(1.0, ar_roots, ma_coefs))
+        sigmasq = sigma*sigma
+        
+        tv = cm.vecD()
+        tv.extend(self.t)
+        yv = cm.vecD()
+        yv.extend(self.y - p['mu'])
+        dyv = cm.vecD()
+        dyv.extend(self.dy)
+        arv = cm.vecC()
+        arv.extend(ar_roots)
+        mav = cm.vecD()
+        mav.extend(ma_coefs)
+        kfilter = cm.KalmanFilterp(tv, yv, dyv, sigmasq, arv, mav)
+
+        kfilter.Filter()
+
+        kmean = np.asarray(kfilter.GetMean())
+        kvar = np.asarray(kfilter.GetVar())
+
+        return (self.y - p['mu'] - kmean) / np.sqrt(kvar)
