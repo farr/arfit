@@ -34,7 +34,9 @@ if __name__ == '__main__':
 
     parser.add_argument('--temps', default=8, type=int, help='number of temperatures (default %(default)s)')
     parser.add_argument('--walkers', default=128, type=int, help='number of walkers (default %(default)s)')
-    
+
+    parser.add_argument('--reset', default=False, action='store_true', help='reset the sampler before continuing sampling')
+        
     args = parser.parse_args()
     
     try:
@@ -46,6 +48,9 @@ if __name__ == '__main__':
         logpost = cpp.Posterior(data[:,0], data[:,1], data[:,2], p=args.p, q=args.q)
         sampler = emcee.PTSampler(args.walkers, logpost.nparams, LL(logpost), LP(logpost), ntemps=args.temps, adaptation_lag=100, adaptation_time=10, Tmax=np.inf)
         result = [np.reshape(np.array([logpost.draw_prior() for i in range(args.temps*args.walkers)]), (args.temps, args.walkers, logpost.nparams))]
+
+    if args.reset:
+        sampler.reset()
 
     while True:
         result = sampler.run_mcmc(result[0], args.save, adapt=True, thin=args.thin)
