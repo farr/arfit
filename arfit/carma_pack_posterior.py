@@ -74,10 +74,10 @@ class Posterior(object):
         return self._dt_min
     @property
     def root_min(self):
-        return 1.0/(10.0*self.T)
+        return 1.0/(2.0*self.T)
     @property
     def root_max(self):
-        return 10.0/self.dt_min
+        return 2.0/self.dt_min
 
     def _mean_variance(self):
         T = self.T
@@ -150,6 +150,24 @@ class Posterior(object):
             root = -np.exp(qp[-1])
             roots = self._quad_to_roots(qp[:-1])
             return np.concatenate((roots, [root]))
+
+    def ar_roots(self, p):
+        p = self.to_params(p)
+
+        return self._quad_to_roots(p['log_quad_p'])
+
+    def ma_roots(self, p):
+        p = self.to_params(p)
+
+        return self._quad_to_roots(p['log_quad_q'])
+
+    def ar_poly(self, p):
+        return np.real(np.poly(self.ar_roots(p)))
+
+    def ma_poly(self, p):
+        poly = np.real(np.poly(self.ma_roots(p)))
+
+        return poly / poly[-1]
 
     def resort_params(self, p):
         p = self.to_params(p).copy()
