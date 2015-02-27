@@ -338,6 +338,30 @@ class Posterior(object):
     def standardised_residuals(self, p):
         p = self.to_params(p)
 
+        kfilter = self._make_kalman_filter(p)
+
+        kmean = np.asarray(kfilter.GetMean())
+        kvar = np.asarray(kfilter.GetVar())
+
+        return (self.y - p['mu'] - kmean) / np.sqrt(kvar)
+
+    def predict(self, p, ts):
+        p = self.to_params(p)
+
+        kfilter = self._make_kalman_filter(p)
+
+        ypred = []
+        ypred_var = []
+        for t in ts:
+            yp = kfilter.Predict(t)
+            ypred.append(yp.first)
+            ypred_var.append(yp.second)
+
+        return np.array(ypred) + p['mu'], np.array(ypred_var)
+
+    def _make_kalman_filter(self, p):
+        p = self.to_params(p)
+
         ar_roots = self.ar_roots(p)
         ma_coefs = self.ma_poly(p)
 
@@ -358,7 +382,4 @@ class Posterior(object):
 
         kfilter.Filter()
 
-        kmean = np.asarray(kfilter.GetMean())
-        kvar = np.asarray(kfilter.GetVar())
-
-        return (self.y - p['mu'] - kmean) / np.sqrt(kvar)
+        return kfilter
