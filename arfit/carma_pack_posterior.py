@@ -50,7 +50,7 @@ class Posterior(object):
     def dtype(self):
         type = [('mu', np.float),
                 ('log_sigma', np.float),
-                ('log_nu', np.float),
+                ('log_nu', np.float), # Scale factor for variance!
                 ('log_quad_p', np.float, self.p)]
         
         if self.q > 0:
@@ -63,6 +63,9 @@ class Posterior(object):
     @property
     def var(self):
         return self._var
+    @property
+    def wn_var(self):
+        return self._wn_var
     @property
     def std(self):
         return self._std
@@ -88,6 +91,8 @@ class Posterior(object):
         self._mu = mu
         self._var = var
         self._std = np.sqrt(var)
+
+        self._wn_var = np.trapz(np.square(self.dy), self.t) / T
 
     def _sorted_roots(self, r):
         real_sel = np.imag(r) == 0.0
@@ -334,6 +339,11 @@ class Posterior(object):
         sigma = np.exp(p['log_sigma']) / np.sqrt(cm.carma_variance(1.0, ar_roots, ma_coefs))
 
         return cm.power_spectrum(fs, sigma, ar_coefs, ma_coefs)
+
+    def white_noise(self, p, bw):
+        p = self.to_params(p)
+
+        return self.wn_var * np.exp(p['log_nu']) / bw
 
     def standardised_residuals(self, p):
         p = self.to_params(p)
