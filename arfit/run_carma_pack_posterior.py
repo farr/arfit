@@ -39,7 +39,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     data = np.loadtxt(args.data)
-    data = data[np.argsort(data[:,0]), :] # Sort data
+
+    times, tind = np.unique(data[:,0], return_index=True)
+    data = data[tind, :]
+    
     logpost = cpp.Posterior(data[:,0], data[:,1], data[:,2], p=args.p, q=args.q)
     sampler = emcee.PTSampler(args.walkers, logpost.nparams, LL(logpost), LP(logpost), ntemps=args.temps, adaptation_lag=100, adaptation_time=10, Tmax=np.inf)
     runner = pr.PTSamplerRunner(sampler, np.reshape(np.array([logpost.draw_prior() for i in range(args.temps*args.walkers)]), (args.temps, args.walkers, logpost.nparams)))
