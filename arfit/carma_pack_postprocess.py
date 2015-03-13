@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 
+# Must happen first!
+import matplotlib
+matplotlib.use('PDF')
+
 import argparse
 from arfit.run_carma_pack_posterior import LL, LP
 import arfit.utils as u
