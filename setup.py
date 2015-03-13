@@ -8,7 +8,7 @@ setup(name='ARFit',
       author='Will M. Farr',
       author_email='w.farr@bham.ac.uk',
       packages=['arfit'],
-      scripts=['arfit/run_carma_pack_posterior.py'],
+      scripts=['arfit/run_carma_pack_posterior.py', 'arfit/carma_pack_postprocess.py'],
       ext_modules = cythonize('arfit/arn_loops.pyx'),
       include_dirs = [np.get_include()])
       
