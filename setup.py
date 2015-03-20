@@ -1,5 +1,5 @@
 from Cython.Build import cythonize
-from distutils.core import setup
+from setuptools import setup, Extension
 import numpy as np
 
 setup(name='ARFit',
@@ -9,6 +9,6 @@ setup(name='ARFit',
       author_email='w.farr@bham.ac.uk',
       packages=['arfit'],
       scripts=['arfit/run_carma_pack_posterior.py', 'arfit/carma_pack_postprocess.py'],
-      ext_modules = cythonize('arfit/arn_loops.pyx'),
+      ext_modules = cythonize(Extension('arn_loops', ['arfit/arn_loops.pyx'])),
       include_dirs = [np.get_include()])
       

@@ -4,3 +4,4 @@
 doc/.build
 build
 *.so
+ARFit.egg-info
