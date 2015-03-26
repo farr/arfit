@@ -35,6 +35,7 @@ if __name__ == '__main__':
     parser.add_argument('--neff', default=128, type=int, help='number of independent ensembles desired (default %(default)s)')
 
     parser.add_argument('--reset', default=False, action='store_true', help='reset the sampler before continuing sampling')
+    parser.add_argument('--reset-once', default=False, action='store_true', help='reset the sampler once (remove \'reset.once\' to reset again)')
         
     args = parser.parse_args()
     
@@ -57,5 +58,14 @@ if __name__ == '__main__':
 
     if args.reset:
         runner.reset()
+    if args.reset_once and runner.chain is not None:
+        try:
+            with open('reset.once', 'r') as inp:
+                pass
+        except:
+            # Couldn't open reset.once, so reset
+            runner.reset()
+            with open('reset.once', 'w') as out:
+                out.write('Reset!\n')
 
     runner.run_to_neff(args.neff, '.', adapt=True)
