@@ -15,19 +15,24 @@ import plotutils.runner as pr
 import scipy.stats as ss
 import triangle as tri
 
-def plot_psd(runner, xlabel=None, ylabel=None, Npts=1000, Nmcmc=1000):
-    logpost = runner.sampler.logp.lp
+def plot_psd(logpost, chain, xlabel=None, ylabel=None, Npts=1000, Nmcmc=1000):
     fs = exp(linspace(log(1.0/(2.0*logpost.T)), log(2.0/logpost.dt_min), Npts))
     ls = ps.normalised_lombscargle(logpost.t, logpost.y, fs)
     psds = []
     wns = []
-    for p in permutation(runner.burnedin_chain[0,...].reshape((-1, logpost.nparams)))[:Nmcmc, :]:
+    for p in permutation(chain)[:Nmcmc,:]:
         psds.append(logpost.power_spectrum(fs, p))
-        wns.append(logpost.white_noise(p, fs[-1] - fs[0]))
+        try:
+            wns.append(logpost.white_noise(p, fs[-1] - fs[0]))
+        except:
+            pass
     psds = array(psds)
     wns = array(wns)
     ar_psds = psds
-    psds = wns.reshape((-1, 1)) + psds
+    try:
+        psds = wns.reshape((-1, 1)) + psds
+    except:
+        pass
 
     loglog(fs, ls, '-k')
     
@@ -38,12 +43,14 @@ def plot_psd(runner, xlabel=None, ylabel=None, Npts=1000, Nmcmc=1000):
     loglog(fs, median(ar_psds, axis=0), '-r')
     fill_between(fs, percentile(ar_psds, 84, axis=0), percentile(ar_psds, 16, axis=0), color='r', alpha=0.25)
     fill_between(fs, percentile(ar_psds, 97.5, axis=0), percentile(ar_psds, 2.5, axis=0), color='r', alpha=0.25)
+    try:
+        axhline(median(wns), color='g')
+        fill_between(fs, percentile(wns, 84) + 0*fs, percentile(wns, 16) + 0*fs, color='g', alpha=0.25)
+        fill_between(fs, percentile(wns, 97.5) + 0*fs, percentile(wns, 2.5) + 0*fs, color='g', alpha=0.25)
+    except:
+        pass
     
-    axhline(median(wns), color='g')
-    fill_between(fs, percentile(wns, 84) + 0*fs, percentile(wns, 16) + 0*fs, color='g', alpha=0.25)
-    fill_between(fs, percentile(wns, 97.5) + 0*fs, percentile(wns, 2.5) + 0*fs, color='g', alpha=0.25)
-    
-    axis(ymin=percentile(wns, 2.5)/1000.0)
+    axis(ymin=np.min(ls)/1000.0)
 
     if xlabel is not None:
         plt.xlabel(xlabel)
@@ -83,7 +90,7 @@ def process_output_dir(dir, runner=None, return_runner=False):
     savefig(op.join(dir, 'chains.pdf'))
 
     figure()
-    plot_psd(runner)
+    plot_psd(runner.logp.lp, runner.burnedin_chain[0,...].reshape((-1, runner.chain.shape[-1])))
     savefig(op.join(dir, 'psd.pdf'))
 
     figure()

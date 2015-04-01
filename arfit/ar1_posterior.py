@@ -36,6 +36,22 @@ class AR1Posterior(object):
         return self._times
 
     @property
+    def t(self):
+        return self.times
+
+    @property
+    def y(self):
+        return self.samples
+
+    @property
+    def T(self):
+        return self.times[-1] - self.times[0]
+
+    @property
+    def dt_min(self):
+        return np.min(np.diff(self.times))
+
+    @property
     def samples(self):
         """The data samples."""
         return self._samples
@@ -92,6 +108,20 @@ class AR1Posterior(object):
 
         return alphas, betas
 
+    def residuals(self, p):
+        """Returns a series of residuals that should be independent,
+        normally-distributed.
+        """
+
+        p = self.to_params(p)
+
+        alphas, betas = self._alphas_betas(p)
+
+        ys = self.samples.copy() - p['mu']
+        ys[1:] = (ys[1:] - alphas*ys[0:-1])
+
+        return ys
+
     def whitened_residuals(self, p):
         """Returns a series of residuals that should be independently,
         :math:`N(0,1)` distributed for the given parameters.
@@ -107,7 +137,7 @@ class AR1Posterior(object):
 
         return ys
 
-    def power_spectrum(self, p, fs):
+    def power_spectrum(self, fs, p):
         r"""Returns the power spectrum at the indicated frequencies for the
         AR(1) process represented by the given parameters.  The power
         spectrum is given by 
@@ -123,7 +153,7 @@ class AR1Posterior(object):
         sigma = np.exp(p['lnsigma'])
         tau = np.exp(p['lntau'])
 
-        return 4.0*sigma*sigma*tau*tau/(np.square(2.0*np.pi*tau*fs) + 1)
+        return 2.0*sigma*sigma*tau/(np.square(2.0*np.pi*tau*fs) + 1)
 
     def log_prior(self, p):
         r"""Returns the log of the prior function on parameters.  The prior is
