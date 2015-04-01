@@ -137,6 +137,25 @@ class AR1Posterior(object):
 
         return ys
 
+    def prediction(self, p):
+        """Returns a series of predicted values at the sample times
+        given parameters p.
+        """
+        
+        p = self.to_params(p)
+
+        alphas, betas = self._alphas_betas(p)
+
+        ys = self.samples.copy() - p['mu']
+
+        preds = np.zeros(ys.shape)
+
+        preds[1:] = alphas*ys[0:-1]
+
+        preds += p['mu']
+
+        return preds, betas
+
     def power_spectrum(self, fs, p):
         r"""Returns the power spectrum at the indicated frequencies for the
         AR(1) process represented by the given parameters.  The power
@@ -153,7 +172,7 @@ class AR1Posterior(object):
         sigma = np.exp(p['lnsigma'])
         tau = np.exp(p['lntau'])
 
-        return 2.0*sigma*sigma*tau/(np.square(2.0*np.pi*tau*fs) + 1)
+        return 4.0*sigma*sigma*tau/(np.square(2.0*np.pi*tau*fs) + 1)
 
     def log_prior(self, p):
         r"""Returns the log of the prior function on parameters.  The prior is
