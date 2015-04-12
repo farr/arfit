@@ -1,4 +1,5 @@
 import numpy as np
+import scipy.linalg as sl
 
 class AR1Posterior(object):
     r"""Represents the posterior for an AR(1) process at arbitrary sample
@@ -14,67 +15,61 @@ class AR1Posterior(object):
 
     .. math::
 
-      \rho(\Delta t) = \sigma^2 \exp\left( - \frac{\Delta t}{\tau} \right)
+      \rho(\Delta t) = \sigma^2 \left( (1-\nu) \exp\left( - \frac{\Delta t}{\tau} \right) + \nu \delta(\Delta t) \right)
 
     where :math:`\sigma^2` is the variance of the process, and
     :math:`\tau` is the autocorrelation time for the process.
 
     """
 
-    def __init__(self, times, samples):
+    def __init__(self, ts, ys):
         """:param times: The sample times.
 
         :param samples: The data samples.
 
         """
-        self._times = times
-        self._samples = samples
+        self._ts = ts
+        self._ys = ys
 
     @property
-    def times(self):
-        """The sample times."""
-        return self._times
+    def ts(self):
+        """Sample times again."""
 
-    @property
-    def t(self):
-        return self.times
-
-    @property
-    def y(self):
-        return self.samples
-
-    @property
-    def T(self):
-        return self.times[-1] - self.times[0]
-
-    @property
-    def dt_min(self):
-        return np.min(np.diff(self.times))
-
-    @property
-    def samples(self):
-        """The data samples."""
-        return self._samples
+        return self._ts
 
     @property
     def ys(self):
-        """Synonym for ``samples``."""
-        return self.samples
-    
+        """Samples."""
+        return self._ys
+
+    @property
+    def T(self):
+        """Total time.
+
+        """
+        return self.ts[-1] - self.ts[0]
+
+    @property
+    def dt_min(self):
+        """Minimum step.
+
+        """
+        return np.min(np.diff(self.ts))
+
     @property
     def dtype(self):
         """Returns a data type appropriate for parameters.  See :meth:`to_params`.
 
         """
         return np.dtype([('mu', np.float), ('lnsigma', np.float),
-                         ('lntau', np.float)])
+                         ('lntau', np.float), ('logitnu', np.float)])
 
     @property
     def nparams(self):
         """Returns the number of parameters.
 
         """
-        return 3
+        return 4
 
     def to_params(self, p):
         r"""Returns a view of the array ``p`` that corresponds to a
@@ -90,6 +85,10 @@ class AR1Posterior(object):
         ``lntau``
           The natural log of :math:`\tau`
 
+        ``logitnu``
+          The logit of the :math:`\nu` parameter giving the fraction
+          of white and coloured noise
+
         """
         p = np.atleast_1d(p)
 
@@ -100,13 +99,38 @@ class AR1Posterior(object):
 
         sigma = np.exp(p['lnsigma'])
         tau = np.exp(p['lntau'])
-        dts = np.diff(self.times)
+        dts = np.diff(self.ts)
         alphas = np.exp(-dts/tau)
         betas = sigma * np.sqrt(1.0 - alphas*alphas)
 
         betas = np.concatenate(([sigma[0]], betas))
 
         return alphas, betas
+
+    def _inv_logit(self, y):
+        if y < 0:
+            ey = np.exp(y)
+            return y/(1+y)
+        else:
+            return 1.0/(1.0+np.exp(-y))
+
+    def _banded_covariance(self, p):
+        p = self.to_params(p)
+
+        sigma = np.exp(p['lnsigma'])
+        nu = self._inv_logit(p['logitnu'])
+
+        alphas, betas = self._alphas_betas(p)
+
+        bc = np.zeros((2, self.ts.shape[0]))
+        bc[0, :] = (1-nu)*betas*betas
+
+        bc[0, :] += nu*sigma*sigma
+        bc[0, 1:] += nu*sigma*sigma*np.square(alphas)
+
+        bc[1, :-1] = -alphas*nu*sigma*sigma
+
+        return bc
 
     def residuals(self, p):
         """Returns a series of residuals that should be independent,
@@ -119,21 +143,6 @@ class AR1Posterior(object):
 
         ys = self.samples.copy() - p['mu']
         ys[1:] = (ys[1:] - alphas*ys[0:-1])
-
-        return ys
-
-    def whitened_residuals(self, p):
-        """Returns a series of residuals that should be independently,
-        :math:`N(0,1)` distributed for the given parameters.
-
-        """
-        p = self.to_params(p)
-
-        alphas, betas = self._alphas_betas(p)
-
-        ys = self.samples.copy() - p['mu']
-        ys[1:] = (ys[1:] - alphas*ys[0:-1])/betas[1:]
-        ys[0] = ys[0] / betas[0]
 
         return ys
 
@@ -180,7 +189,20 @@ class AR1Posterior(object):
 
         """
 
-        return 0.0
+        # Flat priors in everything except logit-nu.
+        # Flat prior in nu.
+
+        lp = 0.0
+        p = self.to_params(p)
+
+        lnu = p['logitnu']
+
+        if lnu < 0:
+            lp += lnu - 2.0*np.log1p(np.exp(lnu))
+        else:
+            lp += -lnu - 2.0*np.log1p(np.exp(-lnu))
+
+        return lp
 
     def log_likelihood(self, p):
         r"""Returns the log of the likelihood for the stored data given
@@ -190,13 +212,24 @@ class AR1Posterior(object):
 
         """
         p = self.to_params(p)
-        alphas, betas = self._alphas_betas(p)
 
-        ys = self.samples.copy() - p['mu']
-        ys[1:] = (ys[1:] - alphas*ys[0:-1])/betas[1:]
-        ys[0] = ys[0] / betas[0]
-        
-        return -0.5*ys.shape[0]*np.log(2.0*np.pi) - np.sum(np.log(betas)) - 0.5*np.sum(np.square(ys))
+        alphas, betas = self._alphas_betas(p)
+        bc = self._banded_covariance(p)
+
+        ys = self.ys.copy() - p['mu']
+        ys[1:] = ys[1:] - alphas*ys[0:-1]
+
+        dts = self.ts.reshape((-1, 1)) - self.ts.reshape((1, -1))
+        tau = np.exp(p['lntau'])
+        nu = self._inv_logit(p['logitnu'])
+        sigma = np.exp(p['lnsigma'])
+        full_cov = sigma*sigma*((1-nu)*np.exp(-np.abs(dts)/tau) + nu)
+
+        llow = sl.cholesky_banded(bc, lower=True)
+
+        logdet = np.sum(np.log(llow[0, :]))
+
+        return -0.5*self.ts.shape[0]*np.log(2.0*np.pi) - logdet - 0.5*np.dot(ys, sl.cho_solve_banded((llow, True), ys))
 
     def __call__(self, p):
         lp = self.log_prior(p)
@@ -205,16 +238,3 @@ class AR1Posterior(object):
             return np.NINF
         else:
             return lp + self.log_likelihood(p)
-
-    def draw_data(self, p):
-        """Returns a draw of data from the model with parameters p.
-
-        """
-        p = self.to_params(p)
-        alphas, betas = self._alphas_betas(p)
-
-        ys = [np.random.randn(1)*betas[0]]
-        for a,b in zip(alphas, betas[1:]):
-            ys.append(a*ys[-1] + b*np.random.randn(1))
-
-        return np.array(ys).squeeze() + p['mu']
