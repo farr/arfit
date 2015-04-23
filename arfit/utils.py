@@ -1,10 +1,10 @@
 from pylab import *
-import carma_pack_posterior as cpp
+#import carma_pack_posterior as cpp
 import pspec as ps
-import run_carma_pack_posterior as rcp
-from run_carma_pack_posterior import LL, LP
+#import run_carma_pack_posterior as rcp
+#from run_carma_pack_posterior import LL, LP
 import bz2
-import carmcmc as cm
+#import carmcmc as cm
 import emcee 
 import os
 import os.path as op
