@@ -1,6 +1,11 @@
+cimport cython
 import numpy as np
 cimport numpy as np
 
+cdef extern from "math.h":
+     double exp(double x)
+
+@cython.boundscheck(False)
 def predict(np.ndarray[np.float_t, ndim=1] t,
             np.ndarray[np.float_t, ndim=1] y,
             np.ndarray[np.float_t, ndim=1] vy,
@@ -8,7 +13,7 @@ def predict(np.ndarray[np.float_t, ndim=1] t,
             np.ndarray[np.float_t, ndim=1] vyp,
             double sigma,
             double tau):
-    cdef int i
+    cdef unsigned int i
     cdef double kp
     cdef double vkp
     cdef double dt
@@ -41,7 +46,7 @@ def predict(np.ndarray[np.float_t, ndim=1] t,
 
         # Advance to the next timestep
         dt = t[i+1] - t[i]
-        alpha = np.exp(-dt/tau)
+        alpha = exp(-dt/tau)
         kp = kp*alpha
         vkp = alpha*alpha*vkp + (1 - alpha*alpha)*sigma2
 
