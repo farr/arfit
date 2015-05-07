@@ -26,6 +26,8 @@ class LP(object):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
+    parser.add_argument('--init', default=None, help='initialisation state file')
+
     parser.add_argument('--data', required=True, help='data file')
     parser.add_argument('--p', required=True, type=int, help='AR(p)')
     parser.add_argument('--q', required=True, type=int, help='MA(q)')
@@ -53,8 +55,15 @@ if __name__ == '__main__':
     except:
         print 'WARNING: could not load saved runner state.'
         sys.__stdout__.flush()
+
+        if args.init is not None:
+            with bz2.BZ2File(args.init, 'r') as inp:
+                init = np.load(inp)
+        else:
+            init = np.reshape(np.array([logpost.draw_prior() for i in range(args.temps*args.walkers)]), (args.temps, args.walkers, logpost.nparams))
+
         sampler = emcee.PTSampler(args.walkers, logpost.nparams, LL(logpost), LP(logpost), ntemps=args.temps, adaptation_lag=100, adaptation_time=10, Tmax=np.inf)
-        runner = pr.PTSamplerRunner(sampler, np.reshape(np.array([logpost.draw_prior() for i in range(args.temps*args.walkers)]), (args.temps, args.walkers, logpost.nparams)))
+        runner = pr.PTSamplerRunner(sampler, init)
 
     if args.reset:
         runner.reset()
