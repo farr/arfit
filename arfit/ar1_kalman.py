@@ -26,7 +26,7 @@ def logit_log_jacobian(y, low, high):
         return ey*(high-low)/np.square(1 + ey)
 
 class AR1KalmanPosterior(object):
-    def __init__(self, t, y, dy, scale_low=0.1, scale_high=10.0):
+    def __init__(self, t, y, dy, scale_low=0.1, scale_high=10.0, tau_low=None, tau_high=None):
         self._t = t
         self._y = y
         self._dy = dy
@@ -37,8 +37,15 @@ class AR1KalmanPosterior(object):
         self._sigma_low = np.std(y)*scale_low
         self._sigma_high = np.std(y)*scale_high
 
-        self._tau_low = scale_low*np.min(np.diff(t))
-        self._tau_high = scale_high*(t[-1] - t[0])
+        if tau_low is None:
+            self._tau_low = scale_low*np.min(np.diff(t))
+        else:
+            self._tau_low = tau_low
+
+        if tau_high is None:
+            self._tau_high = scale_high*(t[-1] - t[0])
+        else:
+            self._tau_high = tau_high
 
         self._wn_var = np.trapz(dy*dy, t)/(t[-1] - t[0])
 
