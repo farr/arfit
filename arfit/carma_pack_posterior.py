@@ -19,7 +19,7 @@ class Posterior(object):
         self._dyv = cm.vecD()
         self._dyv.extend(dy)
 
-        self._carma_process = cm.run_mcmc_carma(1, 1, self._tv, self._yv, self._dyv, self.p, self.q, 10, False, 1)
+        self._carma_process = cm.run_mcmc_carma(1, 1, self._tv, self._yv, self._dyv, self.p, self.q, 1, False, 1)
 
         self._carma_process.SetMLE(True)
 
@@ -321,7 +321,7 @@ class Posterior(object):
         self._dyv = cm.vecD()
         self._dyv.extend(self.dy)
 
-        self._carma_process = cm.run_mcmc_carma(1, 1, self._tv, self._yv, self._dyv, self.p, self.q, 10, False, 1)
+        self._carma_process = cm.run_mcmc_carma(1, 1, self._tv, self._yv, self._dyv, self.p, self.q, 1, False, 1)
         self._carma_process.SetMLE(True)
 
     def power_spectrum(self, fs, p):

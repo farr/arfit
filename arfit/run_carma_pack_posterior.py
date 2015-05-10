@@ -36,6 +36,8 @@ if __name__ == '__main__':
     parser.add_argument('--walkers', default=128, type=int, help='number of walkers (default %(default)s)')
     parser.add_argument('--neff', default=128, type=int, help='number of independent ensembles desired (default %(default)s)')
 
+    parser.add_argument('--threads', default=1, type=int, help='number of threads in sampler (default %(default)s)')
+
     parser.add_argument('--reset', default=False, action='store_true', help='reset the sampler before continuing sampling')
     parser.add_argument('--reset-once', default=False, action='store_true', help='reset the sampler once (remove \'reset.once\' to reset again)')
         
@@ -47,7 +49,7 @@ if __name__ == '__main__':
     data = data[tind, :]
     
     logpost = cpp.Posterior(data[:,0], data[:,1], data[:,2], p=args.p, q=args.q)
-    sampler = emcee.PTSampler(args.walkers, logpost.nparams, LL(logpost), LP(logpost), ntemps=args.temps, adaptation_lag=100, adaptation_time=10, Tmax=np.inf)
+    sampler = emcee.PTSampler(args.walkers, logpost.nparams, LL(logpost), LP(logpost), ntemps=args.temps, adaptation_lag=100, adaptation_time=10, Tmax=np.inf, threads=args.threads)
     runner = pr.PTSamplerRunner(sampler, np.reshape(np.array([logpost.draw_prior() for i in range(args.temps*args.walkers)]), (args.temps, args.walkers, logpost.nparams)))
     
     try:
