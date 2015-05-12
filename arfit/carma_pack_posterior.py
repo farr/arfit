@@ -355,6 +355,16 @@ class Posterior(object):
 
         return (self.y - p['mu'] - kmean) / np.sqrt(kvar)
 
+    def residuals(self, p):
+        p = self.to_params(p)
+
+        kfilter = self._make_kalman_filter(p)
+
+        kmean = np.asarray(kfilter.GetMean())
+        kvar = np.asarray(kfilter.GetVar())
+
+        return (self.y - p['mu'] - kmean), kvar
+
     def predict(self, p, ts):
         p = self.to_params(p)
 
