@@ -27,6 +27,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--init', default=None, help='initialisation state file')
+    parser.add_argument('--beta-init', default=None, help='initialisation for the temp ladder')
 
     parser.add_argument('--data', required=True, help='data file')
     parser.add_argument('--p', required=True, type=int, help='AR(p)')
@@ -64,7 +65,12 @@ if __name__ == '__main__':
         else:
             init = np.reshape(np.array([logpost.draw_prior() for i in range(args.temps*args.walkers)]), (args.temps, args.walkers, logpost.nparams))
 
-        sampler = emcee.PTSampler(args.walkers, logpost.nparams, LL(logpost), LP(logpost), ntemps=args.temps, adaptation_lag=100, adaptation_time=10, Tmax=np.inf, threads=args.threads)
+        if args.beta_init is not None:
+            beta_init = np.loadtxt(args.beta_init)
+        else:
+            beta_init = None
+
+        sampler = emcee.PTSampler(args.walkers, logpost.nparams, LL(logpost), LP(logpost), ntemps=args.temps, adaptation_lag=100, adaptation_time=10, Tmax=np.inf, threads=args.threads, betas=beta_init)
         runner = pr.PTSamplerRunner(sampler, init)
 
     if args.reset:
