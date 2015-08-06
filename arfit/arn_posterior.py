@@ -140,7 +140,7 @@ def banded_covariance(roots, ts, beta_roots = None):
         gg = []
         for g, r in zip(gc, roots):
             gg.append(g*np.prod(r - beta_roots)/np.prod(-beta_roots))
-        gg = np.array(gg)        
+        gg = np.array(gg)
     
     dts = np.zeros((2*p+1, n))
     for i in range(1, 2*p+1):
