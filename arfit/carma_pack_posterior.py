@@ -1,5 +1,23 @@
 import carmcmc as cm
 import numpy as np
+import plotutils.parameterizations as par
+
+def _inv_logit(y, a, b):
+    if y > 0.0:
+        e = np.exp(-y)
+        return (b + e*a)/(1.0 + e)
+    else:
+        e = np.exp(y)
+        return (e*b + a)/(1.0 + e)
+    
+def _logit(x, a, b):
+    return np.log(x-a) - np.log(b-x)
+
+def _logit_lj(y, x, a, b):
+    if y < 0.0:
+        return np.log(b-a) + y - 2.0*np.log1p(np.exp(y))
+    else:
+        return np.log(b-a) - y - 2.0*np.log1p(np.exp(-y))
 
 class Posterior(object):
     def __init__(self, t, y, dy, p=2, q=1):
@@ -48,13 +66,13 @@ class Posterior(object):
         return 3 + self.p + self.q
     @property
     def dtype(self):
-        type = [('mu', np.float),
-                ('log_sigma', np.float),
-                ('log_nu', np.float), # Scale factor for variance!
-                ('log_quad_p', np.float, self.p)]
+        type = [('logit_mu', np.float),
+                ('logit_sigma', np.float),
+                ('logit_nu', np.float),
+                ('ar_roots_p', np.float, self.p)]
         
         if self.q > 0:
-            type.append(('log_quad_q', np.float, self.q))
+            type.append(('ma_roots_p', np.float, self.q))
 
         return np.dtype(type)
     @property
@@ -82,6 +100,27 @@ class Posterior(object):
     def root_max(self):
         return 2.0/self.dt_min
 
+    @property
+    def mu_min(self):
+        return self.mu - 5.0*self.std
+    @property
+    def mu_max(self):
+        return self.mu + 5.0*self.std
+
+    @property
+    def sigma_min(self):
+        return self.std/10.0
+    @property
+    def sigma_max(self):
+        return self.std*10.0
+
+    @property
+    def nu_min(self):
+        return 0.1
+    @property
+    def nu_max(self):
+        return 10.0
+
     def _mean_variance(self):
         T = self.T
         
@@ -94,33 +133,7 @@ class Posterior(object):
 
         self._wn_var = np.trapz(np.square(self.dy), self.t) / T
 
-    def _sorted_roots(self, r):
-        real_sel = np.imag(r) == 0.0
-        cplx_roots = r[~real_sel]
-        real_roots = r[real_sel]
-
-        sorted_cplx_roots = cplx_roots[np.argsort(-np.abs(np.imag(cplx_roots)))]
-
-        sorted_real_roots = []
-        real_roots = np.sort(real_roots)
-        while len(real_roots) > 1:
-            imin = np.argmin(np.diff(real_roots))
-            r1 = real_roots[imin]
-            r2 = real_roots[imin+1]
-
-            sorted_real_roots.append(r1)
-            sorted_real_roots.append(r2)
-
-            real_roots = np.concatenate((real_roots[:imin], real_roots[imin+2:]))
-
-        if len(real_roots) == 1:
-            sorted_real_roots.append(real_roots[0])
-
-        return np.concatenate((sorted_cplx_roots, sorted_real_roots))            
-
     def _roots_to_quad(self, r):
-        r = self._sorted_roots(r)
-
         quads = []
         for r1, r2 in zip(r[::2], r[1::2]):
             b = np.real(-(r1+r2))
@@ -159,12 +172,12 @@ class Posterior(object):
     def ar_roots(self, p):
         p = self.to_params(p)
 
-        return self._quad_to_roots(p['log_quad_p'])
+        return par.stable_polynomial_roots(p['ar_roots_p'], self.root_min, self.root_max)
 
     def ma_roots(self, p):
         p = self.to_params(p)
 
-        return self._quad_to_roots(p['log_quad_q'])
+        return par.stable_polynomial_roots(p['ma_roots_p'], self.root_min, self.root_max)
 
     def ar_poly(self, p):
         return np.real(np.poly(self.ar_roots(p)))
@@ -174,114 +187,119 @@ class Posterior(object):
 
         return poly / poly[-1]
 
-    def resort_params(self, p):
-        p = self.to_params(p).copy()
-
-        ps = p['log_quad_p']
-        roots = self._quad_to_roots(ps)
-        roots = self._sorted_roots(roots)
-        p['log_quad_p'] = self._roots_to_quad(roots)
-
-        ps = p['log_quad_q']
-        roots = self._quad_to_roots(ps)
-        roots = self._sorted_roots(roots)
-        p['log_quad_q'] = self._roots_to_quad(roots)
-
-        return p
-        
     def to_params(self, p):
         return np.atleast_1d(p).view(self.dtype).squeeze()
 
     def to_carmapack_params(self, p):
         p = self.to_params(p)
 
+        mu = par.bounded_values(p['logit_nu'], low=self.nu_min, high=self.nu_max)
+        sigma = par.bounded_values(p['logit_sigma'], low=self.sigma_min, high=self.sigma_max)
+        nu = par.bounded_values(p['logit_nu'], low=self.nu_min, high=self.nu_max)
+
         pc = np.zeros(self.nparams)
 
-        pc[0] = np.exp(p['log_sigma'])
-        pc[1] = np.exp(p['log_nu'])
-        pc[2] = p['mu']
-        pc[3:3+self.p] = p['log_quad_p']
-        pc[3+self.p:] = p['log_quad_q']
+        pc[0] = sigma
+        pc[1] = nu*nu # carma_pack wants variance scaling
+        pc[2] = mu
+
+        assert self.p >= 1, 'Must have at least one AR root'
+        pc[3:3+self.p] = self._roots_to_quad(par.stable_polynomial_roots(p['ar_roots_p'], self.root_min, self.root_max))
+
+        if self.q >= 1:
+            pc[3+self.p:] = self._roots_to_quad(par.stable_polynomial_roots(p['ma_roots_p'], self.root_min, self.root_max))
 
         return pc
 
     def carmapack_to_params(self, pc):
         p = self.to_params(np.zeros(self.nparams))
 
-        p['log_sigma'] = np.log(pc[0])
-        p['log_nu'] = np.log(pc[1])
-        p['mu'] = pc[2]
-        p['log_quad_p'] = pc[3:3+self.p]
-        p['log_quad_q'] = pc[3+self.p:]
+        mu = pc[2]
+        nu = np.sqrt(pc[1])
+        sigma = pc[0]
+        
+        p['logit_mu'] = par.bounded_params(mu, low=self.mu_min, high=self.mu_max)
+        p['logit_sigma'] = par.bounded_params(sigma, low=self.sigma_min, high=self.sigma_max)
+        p['logit_nu'] = par.bounded_params(nu, low=self.nu_min, high=self.nu_max)
+
+        p['ar_roots_p'] = par.stable_polynomial_params(self._quad_to_roots(pc[3:3+self.p]))
+
+        if self.q >= 1:
+            p['ma_roots_p'] = par.stable_polynomial_params(self._quad_to_roots(pc[3+self.p:]))
 
         return p
 
     def draw_roots(self, n):
-        roots_real = np.random.uniform(low=-self.root_max, high=-self.root_min, size=n/2)
-        roots_imag = 1j*np.random.uniform(low=0, high=self.root_max, size=n/2)
+        rs = []
 
-        roots1 = roots_real + roots_imag
+        for i in range(0, n-1, 2):
+            if np.random.rand() < 0.5:
+                # Complex
+                re = np.random.uniform(low=-self.root_max, high=-self.root_min)
+                im = np.random.uniform(low=0.0, high=self.root_max)
+
+                rs.append(re + im*1j)
+                rs.append(re - im*1j)
+            else:
+                # Real
+                xy = np.random.uniform(low=-self.root_max, high=-self.root_min, size=2)
+
+                rs.append(xy[0])
+                rs.append(xy[1])
 
         if n % 2 == 1:
-            roots1 = np.concatenate((roots1, [np.random.uniform(low=-self.root_max, high=-self.root_min)]))
-        
-        roots2 = roots_real - roots_imag
+            x = np.random.uniform(low=-self.root_max, high=-self.root_min)
+            rs.append(x)
 
-        roots = np.zeros(n, dtype=np.complex)
-        roots[..., ::2] = roots1
-        roots[..., 1::2] = roots2
-
-        return self._sorted_roots(roots)
+        return np.array(rs, dtype=np.complex)
 
     def draw_prior(self):
-        mus = np.random.uniform(low=self.mu - 5*self.std,
-                                high=self.mu + 5*self.std)
-        log_sigmas = np.random.uniform(low=np.log(self.std/10.0),
-                                       high=np.log(self.std*10.0))
-        log_nus = np.random.uniform(low=np.log(0.1),
-                                    high=np.log(10.0))
+        mu = np.random.uniform(low=self.mu_min, high=self.mu_max)
+        sigma = np.exp(np.random.uniform(low=np.log(self.sigma_min), high=np.log(self.sigma_max)))
+        nu = np.exp(np.random.uniform(low=np.log(self.nu_min),
+                                      high=np.log(self.nu_max)))
         ar_quad = self._roots_to_quad(self.draw_roots(self.p))
         ma_quad = self._roots_to_quad(self.draw_roots(self.q))
 
-        return np.concatenate(([mus, log_sigmas, log_nus], ar_quad, ma_quad))
+        mup = par.bounded_params(mu, low=self.mu_min, high=self.mu_max)
+        sigmap = par.bounded_params(sigma, low=self.sigma_min, high=self.sigma_max)
+        nup = par.bounded_params(nu, low=self.nu_min, high=self.nu_max)
+
+        return np.concatenate((mup, sigmap, nup, ar_quad, ma_quad))
 
     def log_prior(self, p):
         p = self.to_params(p)
 
-        # Prior ranges
-        if p['mu'] < self.mu - 5*self.std or p['mu'] > self.mu + 5*self.std:
-            return np.NINF
-        if p['log_sigma'] < np.log(self.std/10.0) or p['log_sigma'] > np.log(10.0*self.std):
-            return np.NINF
-        if p['log_nu'] < np.log(0.1) or p['log_nu'] > np.log(10.0):
-            return np.NINF
+        lp = 0.0
 
-        root_max = self.root_max
-        root_min = self.root_min
+        # mu
+        lp += par.bounded_log_jacobian(p['logit_mu'], low=self.mu_min, high=self.mu_max)
 
-        ar_roots = self._quad_to_roots(p['log_quad_p'])
-        ma_roots = self._quad_to_roots(p['log_quad_q'])
+        # sigma
+        lp += par.bounded_log_jacobian(p['logit_sigma'], low=self.sigma_min, high=self.sigma_max)
+        sigma = par.bounded_values(p['logit_sigma'], low=self.sigma_min, high=self.sigma_max)
+        lp -= np.log(sigma)
 
-        if np.any(np.real(ar_roots) < -root_max) or np.any(np.real(ar_roots) > -root_min):
-            return np.NINF
-        if np.any(np.real(ma_roots) < -root_max) or np.any(np.real(ma_roots) > -root_min):
-            return np.NINF
-        if np.any(np.abs(np.imag(ar_roots)) > root_max):
-            return np.NINF
-        if np.any(np.abs(np.imag(ma_roots)) > root_max):
-            return np.NINF
+        # nu
+        lp += par.bounded_log_jacobian(p['logit_nu'], low=self.nu_min, high=self.nu_max)
+        nu = par.bounded_values(p['logit_nu'], low=self.nu_min, high=self.nu_max)
+        lp -= np.log(nu)
 
-        # Root uniqueness---this introduces some *major* discontinuities!
-        ar_roots_sorted = self._sorted_roots(ar_roots)
-        ma_roots_sorted = self._sorted_roots(ma_roots)
+        # ar roots
+        lp += par.stable_polynomial_log_jacobian(p['ar_roots_p'], self.root_min, self.root_max)
+        roots = par.stable_polynomial_roots(p['ar_roots_p'], self.root_min, self.root_max)
+        roots = roots[np.imag(roots) >= 0.0] # only positive roots
 
-        if not np.all(ar_roots_sorted == ar_roots):
-            return np.NINF
-        if not np.all(ma_roots_sorted == ma_roots):
-            return np.NINF
+        lp -= np.sum(np.log(np.abs(roots)))
 
-        # Otherwise, flat prior
-        return 0.0
+        if self.q >= 1:
+            lp += par.stable_polynomial_log_jacobian(p['ma_roots_p'], self.root_min, self.root_max)
+            roots = par.stable_polynomial_roots(p['ma_roots_p'], self.root_min, self.root_max)
+            roots = roots[np.imag(roots) >= 0.0]
+
+            lp -= np.sum(np.log(np.abs(roots)))
+
+        return lp
 
     def log_likelihood(self, p):
         pc = self.to_carmapack_params(p)
@@ -327,8 +345,8 @@ class Posterior(object):
     def power_spectrum(self, fs, p):
         p = self.to_params(p)
 
-        ar_roots = self._quad_to_roots(p['log_quad_p'])
-        ma_roots = self._quad_to_roots(p['log_quad_q'])
+        ar_roots = self.ar_roots(p)
+        ma_roots = self.ma_roots(p)
 
         ar_coefs = np.real(np.poly(ar_roots))
 
@@ -336,14 +354,18 @@ class Posterior(object):
         ma_coefs /= ma_coefs[-1]
         ma_coefs = ma_coefs[::-1]
 
-        sigma = np.exp(p['log_sigma']) / np.sqrt(cm.carma_variance(1.0, ar_roots, ma_coefs))
+        s = par.bounded_values(p['logit_sigma'], low=self.sigma_min, high=self.sigma_max)
+
+        sigma = s / np.sqrt(cm.carma_variance(1.0, ar_roots, ma_coefs))
 
         return cm.power_spectrum(fs, sigma, ar_coefs, ma_coefs)
 
     def white_noise(self, p, bw):
         p = self.to_params(p)
 
-        return self.wn_var * np.exp(p['log_nu']) / bw
+        nu = par.bounded_values(p['logit_nu'], low=self.nu_min, high=self.nu_max)
+        
+        return self.wn_var * nu*nu / bw
 
     def standardised_residuals(self, p):
         p = self.to_params(p)
@@ -385,7 +407,9 @@ class Posterior(object):
         ar_roots = self.ar_roots(p)
         ma_coefs = self.ma_poly(p)
 
-        sigma = np.exp(p['log_sigma']) / np.sqrt(cm.carma_variance(1.0, ar_roots, ma_coefs))
+        s = par.bounded_values(p['logit_sigma'], low=self.sigma_min, high=self.sigma_max)
+        
+        sigma = s / np.sqrt(cm.carma_variance(1.0, ar_roots, ma_coefs))
         sigmasq = sigma*sigma
         
         tv = cm.vecD()
