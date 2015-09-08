@@ -17,10 +17,18 @@ def csample_from_files(datafile, chainfile, p, q):
 def normalised_lombscargle(ts, ys, dys):
     model = LombScargleFast().fit(ts, ys, dys)
 
-    pers, pows = model.periodogram_auto()
-    fs = 1.0/pers
+    T = np.max(ts)-np.min(ts)
+    dts = np.diff(np.sort(ts))
 
-    T = np.max(ts) - np.min(ts)
+    fny = np.mean(1.0/(2.0*dts))
+    df = 1.0/T
+
+    N = fny/df
+
+    fs = np.linspace(df, fny, N)
+
+    pows = model.score_frequency_grid(df, df, N)
+
     mu = 1.0/T*np.trapz(ys, ts)
     s2 = 1.0/T*np.trapz(np.square(ys-mu), ts)
 
