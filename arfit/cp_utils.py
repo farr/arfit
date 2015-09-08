@@ -36,15 +36,20 @@ def normalised_lombscargle(ts, ys, dys):
 
 
 def plot_psd_sample_data(sample):
-    sample.plot_power_spectrum(doShow=False)
+    psd_low, psd_high, psd_med, fs = sample.plot_power_spectrum(doShow=False)
+
+    plt.clf()
+
+    plt.loglog(fs, psd_med, '-b', alpha=0.33)
+    plt.fill_between(fs, psd_low, psd_high, color='b', alpha=0.17)
 
     noise_level = 2.0*np.mean(np.diff(sample.time))*np.mean(np.square(sample.ysig))
 
-    plt.axhline(noise_level, color='g')
+    plt.axhline(noise_level, color='g', alpha=0.33)
 
     fs, psd = normalised_lombscargle(sample.time, sample.y, sample.ysig)
 
-    plt.loglog(fs, psd, '-k')
+    plt.loglog(fs, psd, '-r', alpha=0.33)
 
 def plot_psd_sample_draw(sample, loc='upper left'):
     fs, psd = normalised_lombscargle(sample.time, sample.y, sample.ysig)
@@ -53,6 +58,6 @@ def plot_psd_sample_draw(sample, loc='upper left'):
 
     fs, dpsd = normalised_lombscargle(sample.time, ys_draw, sample.ysig)
 
-    plt.loglog(fs, psd, '-k', label='Data')
-    plt.loglog(fs, dpsd, '-b', label='Prediction')
+    plt.loglog(fs, psd, '-k', label='Data', alpha=0.5)
+    plt.loglog(fs, dpsd, '-b', label='Prediction', alpha=0.5)
     plt.legend(loc=loc)
