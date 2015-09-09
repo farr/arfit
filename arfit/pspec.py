@@ -1,3 +1,4 @@
+from gatspy.periodic import LombScargleFast
 import numpy as np
 import scipy.interpolate as si
 import scipy.signal as ss
@@ -49,19 +50,19 @@ def acf(ts, data):
     paddedacf = np.fft.ifft(np.square(np.abs(np.fft.fft(paddedidata))))
     return its-its[0], paddedacf[:idata.shape[0]]/paddedacf[0]
 
-def normalised_lombscargle(ts, ys, fs):
-    """Returns a Lomb-Scargle periodigram, normalised to integrate
-    over frequencies to the variance of the ``ys``. 
+def normalised_lombscargle(ts, ys, dys, oversampling=5, nyquist_factor=3):
+    """Returns ``(fs, psd)``, an array of frequencies and a Lomb-Scargle
+    estimate of the one-sided power spectral density.  Optional
+    arguments passed to Gatspy's `periodogram_auto`.
 
     """
 
-    omegas = 2.0*np.pi*fs
-    unnorm_ls = ss.lombscargle(ts, ys, omegas)
+    pers, pows = LombScargleFast().fit(ts, ys, dys).periodogram_auto(oversampling=oversampling, nyquist_factor=nyquist_factor)
 
-    T = ts[-1] - ts[0]
+    fs = 1.0/pers
 
+    T = np.max(ts) - np.min(ts)
     mu = np.trapz(ys, ts)/T
-
     var = np.trapz(np.square(ys - mu), ts)/T
 
-    return var * unnorm_ls / np.trapz(unnorm_ls, fs)
+    return fs, var * pows / np.trapz(pows, fs)

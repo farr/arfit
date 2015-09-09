@@ -1,10 +1,6 @@
 from pylab import *
-#import carma_pack_posterior as cpp
 import pspec as ps
-#import run_carma_pack_posterior as rcp
-#from run_carma_pack_posterior import LL, LP
 import bz2
-#import carmcmc as cm
 import emcee 
 import os
 import os.path as op
@@ -15,15 +11,18 @@ import plotutils.runner as pr
 import scipy.stats as ss
 import triangle as tri
 
-def plot_psd(logpost, chain, xlabel=None, ylabel=None, Npts=1000, Nmcmc=1000):
-    fs = exp(linspace(log(1.0/(2.0*logpost.T)), log(2.0/logpost.dt_min), Npts))
-    ls = ps.normalised_lombscargle(logpost.t, logpost.y, fs)
+def plot_psd(runner, xlabel=None, ylabel=None, Npts=1000, Nmcmc=1000, oversampling=5, nyquist_factor=3):
+    logpost = runner.sampler.logp.lp
+    chain = runner.burnedin_chain[0,...].reshape((-1, runner.chain.shape[3]))
+    
+    fs, ls = ps.normalised_lombscargle(logpost.t, logpost.y, logpost.dy, oversampling=oversampling, nyquist_factor=nyquist_factor)
+
     psds = []
     wns = []
     for p in permutation(chain)[:Nmcmc,:]:
         psds.append(logpost.power_spectrum(fs, p))
         try:
-            wns.append(logpost.white_noise(p, fs[-1] - fs[0]))
+            wns.append(logpost.white_noise(p, np.max(fs) - np.min(fs)))
         except:
             pass
     psds = array(psds)
@@ -44,7 +43,7 @@ def plot_psd(logpost, chain, xlabel=None, ylabel=None, Npts=1000, Nmcmc=1000):
     fill_between(fs, percentile(ar_psds, 84, axis=0), percentile(ar_psds, 16, axis=0), color='r', alpha=0.25)
     fill_between(fs, percentile(ar_psds, 97.5, axis=0), percentile(ar_psds, 2.5, axis=0), color='r', alpha=0.25)
     try:
-        axhline(median(wns), color='g')
+        plot(fs, 0*fs + median(wns), color='g')
         fill_between(fs, percentile(wns, 84) + 0*fs, percentile(wns, 16) + 0*fs, color='g', alpha=0.25)
         fill_between(fs, percentile(wns, 97.5) + 0*fs, percentile(wns, 2.5) + 0*fs, color='g', alpha=0.25)
     except:
@@ -72,6 +71,15 @@ def plot_resid_distribution(runner, N=10, Npts=1000):
         pu.plot_kde_posterior(r, color='b', alpha=0.1)
     xs = linspace(-5, 5, Npts)
     plot(xs, ss.norm.pdf(xs), '-k')
+
+def plot_resid_acf(runner, N=10):
+    logpost = runner.sampler.logp.lp
+    for p in permutation(runner.burnedin_chain[0,...].reshape((-1, logpost.nparams)))[:N,:]:
+        r = logpost.standardised_residuals(p)
+        acorr(r, maxlags=None, alpha=0.1)
+
+    axhline(1.96/sqrt(r.shape[0]), color='b')
+    axhline(-1.96/sqrt(r.shape[0]), color='b')
 
 def process_output_dir(dir, runner=None, return_runner=False):
     if runner is None:
