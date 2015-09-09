@@ -343,6 +343,9 @@ class Posterior(object):
 
             lp -= np.sum(np.log(np.abs(roots)))
 
+        if np.isnan(lp):
+            lp = -np.inf
+            
         return lp
 
     def log_likelihood(self, p):
@@ -351,7 +354,13 @@ class Posterior(object):
         pcv = cm.vecD()
         pcv.extend(pc)
 
-        return self._carma_process.getLogDensity(pcv)
+        ll = self._carma_process.getLogDensity(pcv)
+
+        if ll == np.NINF:
+            return -1e64 # A large, negative number (emcee doesn't
+                         # like log-likelihoods = -inf)
+        else:
+            return ll
 
     def __call__(self, p):
         lp = self.log_prior(p)
