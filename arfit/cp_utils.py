@@ -20,7 +20,7 @@ def normalised_lombscargle(ts, ys, dys):
     T = np.max(ts)-np.min(ts)
     dts = np.diff(np.sort(ts))
 
-    fny = np.mean(1.0/(2.0*dts))
+    fny = 1.0/(2.0*np.min(dts))
     df = 1.0/T
 
     N = fny/df
@@ -43,11 +43,16 @@ def plot_psd_sample_data(sample):
     plt.loglog(fs, psd_med, '-b', alpha=0.33)
     plt.fill_between(fs, psd_low, psd_high, color='b', alpha=0.17)
 
-    noise_level = 2.0*np.mean(np.diff(sample.time))*np.mean(np.square(sample.ysig))
-
-    plt.axhline(noise_level, color='g', alpha=0.33)
-
     fs, psd = normalised_lombscargle(sample.time, sample.y, sample.ysig)
+
+    bw = fs[-1] - fs[0]
+    T = sample.time[-1] - sample.time[0]
+
+    s2 = 1/T*np.trapz(np.square(sample.ysig), sample.time)
+    noise_level = s2/bw
+    levels = noise_level*np.sqrt(sample.get_samples('measerr_scale'))
+    plt.axhline(np.median(levels), color='g', alpha=0.33)
+    plt.fill_between(fs, np.percentile(levels, 84)+0*fs, np.percentile(levels, 16)+0*fs, color='g', alpha=0.17)
 
     plt.loglog(fs, psd, '-r', alpha=0.33)
 
