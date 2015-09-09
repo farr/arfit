@@ -190,10 +190,54 @@ class Posterior(object):
     def to_params(self, p):
         return np.atleast_1d(p).view(self.dtype).squeeze()
 
+    def deparameterize(self, p):
+        p = self.to_params(p)
+
+        mu = par.bounded_values(p['logit_mu'], low=self.mu_min, high=self.mu_max)
+        sigma = par.bounded_values(p['logit_sigma'], low=self.sigma_min, high=self.sigma_max)
+        nu = par.bounded_values(p['logit_nu'], low=self.nu_min, high=self.nu_max)
+
+        ar_roots = self.ar_roots(p)
+
+        arr = []
+        for i in range(0, ar_roots.shape[0]-1, 2):
+            ar1 = ar_roots[i]
+            ar2 = ar_roots[i+1]
+            if np.imag(ar1) > 0:
+                arr.append(np.real(ar1))
+                arr.append(np.abs(np.imag(ar1)))
+            else:
+                arr.append(np.real(ar1))
+                arr.append(np.real(ar2))
+        if ar_roots.shape[0] % 2 == 1:
+            arr.append(np.real(ar_roots[-1]))
+        arr = np.array(arr)
+
+        if self.q > 0:
+            ma_roots = self.ma_roots(p)
+            
+            mar = []
+            for i in range(0, ma_roots.shape[0]-1, 2):
+                ma1 = ma_roots[i]
+                ma2 = ma_roots[i+1]
+                if np.imag(ma1) > 0:
+                    mar.append(np.real(ma1))
+                    mar.append(np.abs(np.imag(ma1)))
+                else:
+                    mar.append(np.real(ma1))
+                    mar.append(np.real(ma2))
+            if ma_roots.shape[0] % 2 == 1:
+                mar.append(np.real(ma_roots[-1]))
+            mar = np.array(mar)
+
+            return np.concatenate((mu, sigma, nu, arr, mar))
+        else:
+            return np.concatenate((mu, sigma, nu, arr))   
+
     def to_carmapack_params(self, p):
         p = self.to_params(p)
 
-        mu = par.bounded_values(p['logit_nu'], low=self.nu_min, high=self.nu_max)
+        mu = par.bounded_values(p['logit_mu'], low=self.mu_min, high=self.mu_max)
         sigma = par.bounded_values(p['logit_sigma'], low=self.sigma_min, high=self.sigma_max)
         nu = par.bounded_values(p['logit_nu'], low=self.nu_min, high=self.nu_max)
 
@@ -313,9 +357,9 @@ class Posterior(object):
         lp = self.log_prior(p)
 
         if lp == np.NINF:
-            return lp
+            return np.NINF
         else:
-            return lp + self.log_likelihood(p)
+            return float(lp + self.log_likelihood(p))
 
     def __getstate__(self):
         d = self.__dict__.copy()
@@ -375,7 +419,9 @@ class Posterior(object):
         kmean = np.asarray(kfilter.GetMean())
         kvar = np.asarray(kfilter.GetVar())
 
-        return (self.y - p['mu'] - kmean) / np.sqrt(kvar)
+        mu = par.bounded_values(p['logit_mu'], low=self.mu_min, high=self.mu_max)
+        
+        return (self.y - mu - kmean) / np.sqrt(kvar)
 
     def residuals(self, p):
         p = self.to_params(p)
@@ -385,7 +431,9 @@ class Posterior(object):
         kmean = np.asarray(kfilter.GetMean())
         kvar = np.asarray(kfilter.GetVar())
 
-        return (self.y - p['mu'] - kmean), kvar
+        mu = par.bounded_values(p['logit_mu'], low=self.mu_min, high=self.mu_max)
+
+        return (self.y - mu - kmean), kvar
 
     def predict(self, p, ts):
         p = self.to_params(p)
@@ -399,7 +447,9 @@ class Posterior(object):
             ypred.append(yp.first)
             ypred_var.append(yp.second)
 
-        return np.array(ypred) + p['mu'], np.array(ypred_var)
+        mu = par.bounded_values(p['logit_mu'], low=self.mu_min, high=self.mu_max)
+            
+        return np.array(ypred) + mu, np.array(ypred_var)
 
     def _make_kalman_filter(self, p):
         p = self.to_params(p)
@@ -407,17 +457,21 @@ class Posterior(object):
         ar_roots = self.ar_roots(p)
         ma_coefs = self.ma_poly(p)
 
+        mu = par.bounded_values(p['logit_mu'], low=self.mu_min, high=self.mu_max)
+        nu = par.bounded_values(p['logit_nu'], low=self.nu_min, high=self.nu_max)
+
         s = par.bounded_values(p['logit_sigma'], low=self.sigma_min, high=self.sigma_max)
         
         sigma = s / np.sqrt(cm.carma_variance(1.0, ar_roots, ma_coefs))
         sigmasq = sigma*sigma
+        sigmasq = float(sigmasq)
         
         tv = cm.vecD()
         tv.extend(self.t)
         yv = cm.vecD()
-        yv.extend(self.y - p['mu'])
+        yv.extend(self.y - mu)
         dyv = cm.vecD()
-        dyv.extend(self.dy)
+        dyv.extend(self.dy*nu)
         arv = cm.vecC()
         arv.extend(ar_roots)
         mav = cm.vecD()
