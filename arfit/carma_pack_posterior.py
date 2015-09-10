@@ -356,11 +356,10 @@ class Posterior(object):
 
         ll = self._carma_process.getLogDensity(pcv)
 
-        if ll == np.NINF:
-            return -1e64 # A large, negative number (emcee doesn't
-                         # like log-likelihoods = -inf)
-        else:
-            return ll
+        if np.isnan(ll):
+            ll = np.NINF
+        
+        return ll
 
     def __call__(self, p):
         lp = self.log_prior(p)
