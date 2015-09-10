@@ -64,14 +64,15 @@ def plot_residuals(runner, Nmcmc=1000, Npts=1000):
     resid = array(resid)
     errorbar(logpost.t, mean(resid, axis=0), yerr=std(resid, axis=0), color='k', fmt='.')
 
-def plot_resid_distribution(runner, N=10, Npts=1000):
+def plot_resid_distribution(runner, N=10):
     logpost = runner.sampler.logp.lp
     for p in permutation(runner.burnedin_chain[0,...].reshape((-1, logpost.nparams)))[:N, :]:
         r = logpost.standardised_residuals(p)
-        pu.plot_kde_posterior(r, color='b', alpha=0.1)
-    xs = linspace(-5, 5, Npts)
-    plot(xs, ss.norm.pdf(xs), '-k')
+        pu.plot_kde_posterior(r, color='b', alpha=0.1, label='Resid')
 
+    for i in range(N):
+        pu.plot_kde_posterior(randn(r.shape[0]), color='k', alpha=0.1, label='N(0,1)')
+        
 def plot_resid_acf(runner, N=10):
     logpost = runner.sampler.logp.lp
     for p in permutation(runner.burnedin_chain[0,...].reshape((-1, logpost.nparams)))[:N,:]:
