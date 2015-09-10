@@ -81,6 +81,20 @@ def plot_resid_acf(runner, N=10):
     axhline(1.96/sqrt(r.shape[0]), color='b')
     axhline(-1.96/sqrt(r.shape[0]), color='b')
 
+def plot_evidence_integrand(runner, fburnin=0.5):
+    istart = int(round(fburnin*runner.chain.shape[2]))
+
+    lnlikes = runner.lnlikelihood[:, :, istart:]
+    mean_lnlikes = np.mean(lnlikes, axis=(1,2))
+
+    mean_lnlikes = mean_lnlikes[:-1] # strip off beta=0
+    betas = runner.sampler.betas[:-1] # strip off beta=0
+    
+    plot(betas, betas*mean_lnlikes)
+    xlabel(r'$\beta$')
+    ylabel(r'$\beta \left\langle \ln \mathcal{L} \right\rangle_\beta$')
+    xscale('log')
+
 def process_output_dir(dir, runner=None, return_runner=False):
     if runner is None:
         with bz2.BZ2File(op.join(dir, 'runner.pkl.bz2'), 'r') as inp:
