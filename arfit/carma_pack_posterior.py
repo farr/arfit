@@ -2,23 +2,6 @@ import carmcmc as cm
 import numpy as np
 import plotutils.parameterizations as par
 
-def _inv_logit(y, a, b):
-    if y > 0.0:
-        e = np.exp(-y)
-        return (b + e*a)/(1.0 + e)
-    else:
-        e = np.exp(y)
-        return (e*b + a)/(1.0 + e)
-    
-def _logit(x, a, b):
-    return np.log(x-a) - np.log(b-x)
-
-def _logit_lj(y, x, a, b):
-    if y < 0.0:
-        return np.log(b-a) + y - 2.0*np.log1p(np.exp(y))
-    else:
-        return np.log(b-a) - y - 2.0*np.log1p(np.exp(-y))
-
 class Posterior(object):
     def __init__(self, t, y, dy, p=2, q=1):
         self._t = t.copy()
