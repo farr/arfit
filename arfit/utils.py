@@ -95,6 +95,12 @@ def plot_evidence_integrand(runner, fburnin=0.5):
     ylabel(r'$\beta \left\langle \ln \mathcal{L} \right\rangle_\beta$')
     xscale('log')
 
+def dic(runner):
+    istart = int(round(0.5*runner.chain.shape[2]))
+    lnlikes = runner.lnlikelihood[0,:,istart:]
+
+    return -2.0*(np.mean(lnlikes) - np.var(lnlikes))
+
 def process_output_dir(dir, runner=None, return_runner=False):
     if runner is None:
         with bz2.BZ2File(op.join(dir, 'runner.pkl.bz2'), 'r') as inp:
@@ -103,16 +109,17 @@ def process_output_dir(dir, runner=None, return_runner=False):
     runner.sampler.logp.lp._mean_variance()
 
     figure()
-    loglog(1/runner.sampler.beta_history.T)
-    axvline(runner.sampler.chain.shape[2]*0.2)
+    plot(1/runner.sampler.beta_history.T)
+    yscale('log')
+    axvline(runner.sampler.chain.shape[2]*0.5)
     savefig(op.join(dir, 'temp-history.pdf'))
     
     figure()
     pu.plot_emcee_chains_one_fig(runner.burnedin_chain[0,...])
-    savefig(op.join(dir, 'chains.pdf'))
+    savefig(op.join(dir, 'chains0.pdf'))
 
     figure()
-    plot_psd(runner.logp.lp, runner.burnedin_chain[0,...].reshape((-1, runner.chain.shape[-1])))
+    plot_psd(runner)
     savefig(op.join(dir, 'psd.pdf'))
 
     figure()
@@ -122,6 +129,16 @@ def process_output_dir(dir, runner=None, return_runner=False):
     figure()
     plot_resid_distribution(runner)
     savefig(op.join(dir, 'resid-distr.pdf'))
+
+    figure()
+    plot_resid_acf(runner)
+    savefig(op.join(dir, 'resid-acf.pdf'))
+
+    figure()
+    plot_evidence_integrand(runner)
+    ev, dev = runner.sampler.thermodynamic_integration_log_evidence(fburnin=0.5)
+    title(r'$\ln(Z) = {} \pm {}$'.format(ev, dev))
+    savefig(op.join(dir, 'evidence.pdf'))
 
     if return_runner:
         return runner
