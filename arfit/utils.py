@@ -102,6 +102,48 @@ def dic(runner):
 
     return -2.0*(np.mean(lnlikes) - np.var(lnlikes))
 
+def residual_pvalues(runner, Nps=10):
+    logpost = runner.sampler.logp.lp
+
+    stats = []
+    for p in permutation(runner.burnedin_chain[0,...].reshape((-1, logpost.nparams)))[:Nps,:]:
+        r = logpost.standardised_residuals(p)
+        stat, cv, sl = ss.anderson(r, 'norm')
+        stats.append(stat)
+    stats = np.array(stats)
+
+    return stats, cv, sl
+
+def plot_prediction(runner, Npred=1000, Nts=1000):
+    logpost = runner.sampler.logp.lp
+
+    ts = linspace(np.min(logpost.t), np.max(logpost.t), Nts)
+
+    preds = []
+    uls = []
+    lls = []
+    for p in permutation(runner.burnedin_chain[0,...].reshape((-1, logpost.nparams)))[:Npred,:]:
+        pre = logpost.predict(p, ts)
+        preds.append(pre[0])
+        uls.append(pre[0] + sqrt(pre[1]))
+        lls.append(pre[0] - sqrt(pre[1]))
+    preds = np.array(preds)
+    uls = np.array(uls)
+    lls = np.array(lls)
+
+    plot(ts, median(preds, axis=0), '-b')
+    fill_between(ts, median(uls, axis=0), median(lls, axis=0), color='b', alpha=0.5)
+        
+    errorbar(logpost.t, logpost.y, logpost.dy, color='k', fmt='.')
+
+def plot_simulation(runner, Nsim=10):
+    logpost = runner.sampler.logp.lp
+
+    for p in permutation(runner.burnedin_chain[0,...].reshape((-1, logpost.nparams)))[:Nsim,:]:
+        plot(logpost.t, logpost.simulate(p, logpost.t), '-b', alpha=0.1)
+
+    errorbar(logpost.t, logpost.y, logpost.dy, fmt='.', color='k')                
+    
 def process_output_dir(dir, runner=None, return_runner=False):
     if runner is None:
         with bz2.BZ2File(op.join(dir, 'runner.pkl.bz2'), 'r') as inp:
