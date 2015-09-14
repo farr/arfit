@@ -315,14 +315,12 @@ class Posterior(object):
         # ar roots
         lp += par.stable_polynomial_log_jacobian(p['ar_roots_p'], self.root_min, self.root_max)
         roots = par.stable_polynomial_roots(p['ar_roots_p'], self.root_min, self.root_max)
-        roots = roots[np.imag(roots) >= 0.0] # only positive roots
 
         lp -= np.sum(np.log(np.abs(roots)))
 
         if self.q >= 1:
             lp += par.stable_polynomial_log_jacobian(p['ma_roots_p'], self.root_min, self.root_max)
             roots = par.stable_polynomial_roots(p['ma_roots_p'], self.root_min, self.root_max)
-            roots = roots[np.imag(roots) >= 0.0]
 
             lp -= np.sum(np.log(np.abs(roots)))
 
@@ -441,6 +439,20 @@ class Posterior(object):
         mu = par.bounded_values(p['logit_mu'], low=self.mu_min, high=self.mu_max)
             
         return np.array(ypred) + mu, np.array(ypred_var)
+
+    def simulate(self, p, ts):
+        p = self.to_params(p)
+
+        kfilter = self._make_kalman_filter(p)
+
+        vtime = cm.vecD()
+        vtime.extend(ts)
+
+        ysim = np.asarray(kfilter.Simulate(vtime))
+
+        mu = par.bounded_values(p['logit_mu'], low=self.mu_min, high=self.mu_max)
+
+        return ysim + mu
 
     def _make_kalman_filter(self, p):
         p = self.to_params(p)
