@@ -20,6 +20,9 @@ if __name__ == '__main__':
 
     parser.add_argument('--neff', default=1000, type=int, metavar='N', help='number of independent samples (default: %(default)s)')
 
+    parser.add_argument('--tmax', default=100.0, type=float, metavar='T', help='maximum temperature')
+    parser.add_argument('--ntemp', default=10, type=int, metavar='N', help='number of temperatures')
+    
     args = parser.parse_args()
     
     data = np.loadtxt(args.input)
@@ -36,7 +39,7 @@ if __name__ == '__main__':
     outtemp = out + '.TEMP' + ext
     
     while True:
-        sample = model.run_mcmc(nsamp, nthin=thin, nburnin=thin*nsamp/2)
+        sample = model.run_mcmc(nsamp, nthin=thin, nburnin=thin*nsamp/2, tmax=args.tmax, ntemperatures=args.ntemp)
 
         np.savetxt(outtemp, np.column_stack((sample.trace, sample.get_samples('loglik'), sample.get_samples('logpost'))))
         os.rename(outtemp, args.output)
