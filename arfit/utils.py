@@ -20,18 +20,12 @@ def plot_psd(logpost, chain, xlabel=None, ylabel=None, Npts=1000, Nmcmc=1000, ov
     wns = []
     for p in permutation(chain)[:Nmcmc,:]:
         psds.append(logpost.power_spectrum(fs, p))
-        try:
-            wns.append(logpost.white_noise(p, np.max(fs) - np.min(fs)))
-        except:
-            pass
+        wns.append(logpost.white_noise(p, np.max(fs) - np.min(fs)))
     psds = array(psds)
     wns = array(wns)
     ar_psds = psds
-    try:
-        psds = wns.reshape((-1, 1)) + psds
-    except:
-        pass
-
+    psds = wns.reshape((-1, 1)) + psds
+    
     loglog(ls_fs, ls, '-k')
     
     loglog(fs, median(psds, axis=0), '-b')
