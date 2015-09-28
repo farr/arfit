@@ -11,8 +11,9 @@ import plotutils.runner as pr
 import scipy.stats as ss
 import triangle as tri
 
-def plot_psd(logpost, chain, xlabel=None, ylabel=None, Npts=1000, Nmcmc=1000, oversampling=5, nyquist_factor=3):
-    ls_fs, ls = ps.normalised_lombscargle(logpost.t, logpost.y, logpost.dy, oversampling=oversampling, nyquist_factor=nyquist_factor)
+def plot_psd(logpost, chain, xlabel=None, ylabel=None, Npts=1000, Nmcmc=1000, oversampling=1):
+    
+    ls_fs, ls = ps.normalised_lombscargle(logpost.t, logpost.y, logpost.dy, oversampling=oversampling)
 
     fs = linspace(np.min(ls_fs), np.max(ls_fs), Npts)
     
@@ -123,47 +124,13 @@ def plot_prediction(logpost, chain, Npred=100, Nts=1000):
         
     errorbar(logpost.t, logpost.y, logpost.dy, color='k', fmt='.')
 
-def process_output_dir(dir, runner=None, return_runner=False):
-    if runner is None:
-        with bz2.BZ2File(op.join(dir, 'runner.pkl.bz2'), 'r') as inp:
-            runner = pickle.load(inp)
+def plot_simulation_psd(logpost, chain):
+    fs, psd = ps.normalised_lombscargle(logpost.t, logpost.y, logpost.dy)
 
-    runner.sampler.logp.lp._mean_variance()
-
-    logpost = runner.sampler.logp.lp
-    chain = runner.burnedin_chain[0,...].reshape((-1, logpost.nparams))
-
-    figure()
-    plot(1/runner.sampler.beta_history.T)
-    yscale('log')
-    axvline(runner.sampler.chain.shape[2]*0.5)
-    savefig(op.join(dir, 'temp-history.pdf'))
+    loglog(fs, psd, '-k', alpha=0.5)
     
-    figure()
-    pu.plot_emcee_chains_one_fig(runner.burnedin_chain[0,...])
-    savefig(op.join(dir, 'chains0.pdf'))
+    for p in permutation(chain)[:10,:]:
+        sim = logpost.simulate(p, logpost.t)
+        fs, psd = ps.normalised_lombscargle(logpost.t, sim, logpost.dy)
 
-    figure()
-    plot_psd(logpost, chain)
-    savefig(op.join(dir, 'psd.pdf'))
-
-    figure()
-    plot_residuals(logpost, chain)
-    savefig(op.join(dir, 'resid.pdf'))
-
-    figure()
-    plot_resid_distribution(logpost, chain)
-    savefig(op.join(dir, 'resid-distr.pdf'))
-
-    figure()
-    plot_resid_acf(logpost, chain)
-    savefig(op.join(dir, 'resid-acf.pdf'))
-
-    figure()
-    plot_evidence_integrand(runner)
-    ev, dev = runner.sampler.thermodynamic_integration_log_evidence(fburnin=0.5)
-    title(r'$\ln(Z) = {} \pm {}$'.format(ev, dev))
-    savefig(op.join(dir, 'evidence.pdf'))
-
-    if return_runner:
-        return runner
+        loglog(fs, psd, '-b', alpha=0.05)

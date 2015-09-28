@@ -50,16 +50,23 @@ def acf(ts, data):
     paddedacf = np.fft.ifft(np.square(np.abs(np.fft.fft(paddedidata))))
     return its-its[0], paddedacf[:idata.shape[0]]/paddedacf[0]
 
-def normalised_lombscargle(ts, ys, dys, oversampling=5, nyquist_factor=3):
+def normalised_lombscargle(ts, ys, dys, fmin=None, fmax=None, oversampling=1):
     """Returns ``(fs, psd)``, an array of frequencies and a Lomb-Scargle
-    estimate of the one-sided power spectral density.  Optional
-    arguments passed to Gatspy's `periodogram_auto`.
+    estimate of the one-sided power spectral density.  
 
     """
 
-    pers, pows = LombScargleFast().fit(ts, ys, dys).periodogram_auto(oversampling=oversampling, nyquist_factor=nyquist_factor)
+    if fmin is None:
+        fmin = 1.0/(np.max(ts)-np.min(ts))
 
-    fs = 1.0/pers
+    if fmax is None:
+        fmax = 1.0/(2.0*np.min(np.diff(np.sort(ts))))
+
+    df = fmin/oversampling
+    N = int(round(fmax - fmin)/df)
+
+    pows = LombScargleFast().fit(ts, ys, dys).score_frequency_grid(fmin, df, N)
+    fs = fmin + df*np.arange(N)
 
     T = np.max(ts) - np.min(ts)
     mu = np.trapz(ys, ts)/T
