@@ -440,7 +440,7 @@ class Posterior(object):
             
         return np.array(ypred) + mu, np.array(ypred_var)
 
-    def simulate(self, p, ts):
+    def simulate(self, p, ts, dys=None):
         p = self.to_params(p)
 
         kfilter = self._make_kalman_filter(p)
@@ -449,6 +449,10 @@ class Posterior(object):
         vtime.extend(ts)
 
         ysim = np.asarray(kfilter.Simulate(vtime))
+
+        if dys is not None:
+            nu = par.bounded_values(p['logit_nu'], low=self.nu_min, high=self.nu_max)
+            ysim = ysim + np.random.randn(ysim.shape[0])*dys*nu
 
         mu = par.bounded_values(p['logit_mu'], low=self.mu_min, high=self.mu_max)
 
