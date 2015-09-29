@@ -9,7 +9,6 @@ import plotutils.autocorr as ac
 import plotutils.plotutils as pu
 import plotutils.runner as pr
 import scipy.stats as ss
-import triangle as tri
 
 def plot_psd(logpost, chain, xlabel=None, ylabel=None, Npts=1000, Nmcmc=1000, oversampling=1):
     
@@ -130,7 +129,7 @@ def plot_simulation_psd(logpost, chain):
     loglog(fs, psd, '-k', alpha=0.5)
     
     for p in permutation(chain)[:10,:]:
-        sim = logpost.simulate(p, logpost.t)
+        sim = logpost.simulate(p, logpost.t, dys=logpost.dy)
         fs, psd = ps.normalised_lombscargle(logpost.t, sim, logpost.dy)
 
         loglog(fs, psd, '-b', alpha=0.05)
