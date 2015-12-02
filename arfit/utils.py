@@ -1,4 +1,5 @@
 from pylab import *
+from arfit.run_carma_pack_posterior import LL, LP
 import pspec as ps
 import bz2
 import emcee 
@@ -10,9 +11,9 @@ import plotutils.plotutils as pu
 import plotutils.runner as pr
 import scipy.stats as ss
 
-def plot_psd(logpost, chain, xlabel=None, ylabel=None, Npts=1000, Nmcmc=1000, oversampling=1):
+def plot_psd(logpost, chain, xlabel=None, ylabel=None, Npts=1000, Nmcmc=1000, oversampling=1, fmin=None, fmax=None):
     
-    ls_fs, ls = ps.normalised_lombscargle(logpost.t, logpost.y, logpost.dy, oversampling=oversampling)
+    ls_fs, ls = ps.normalised_lombscargle(logpost.t, logpost.y, logpost.dy, oversampling=oversampling, fmin=fmin, fmax=fmax)
 
     fs = linspace(np.min(ls_fs), np.max(ls_fs), Npts)
     
@@ -123,13 +124,47 @@ def plot_prediction(logpost, chain, Npred=100, Nts=1000):
         
     errorbar(logpost.t, logpost.y, logpost.dy, color='k', fmt='.')
 
-def plot_simulation_psd(logpost, chain):
+def plot_simulation_psd(logpost, chain, fmin=None, fmax=None, oversampling=1):
     fs, psd = ps.normalised_lombscargle(logpost.t, logpost.y, logpost.dy)
 
     loglog(fs, psd, '-k', alpha=0.5)
     
     for p in permutation(chain)[:10,:]:
         sim = logpost.simulate(p, logpost.t, dys=logpost.dy)
-        fs, psd = ps.normalised_lombscargle(logpost.t, sim, logpost.dy)
+        fs, psd = ps.normalised_lombscargle(logpost.t, sim, logpost.dy, fmin=fmin, fmax=fmax, oversampling=oversampling)
 
         loglog(fs, psd, '-b', alpha=0.05)
+
+def plotall_directory(dir, ext='.pdf', fmin=None, fmax=None, oversampling=1):
+    with bz2.BZ2File(op.join(dir, 'runner.pkl.bz2'), 'r') as inp:
+        runner = pickle.load(inp)
+    logpost = runner.sampler.logp.lp
+    chain = runner.burnedin_chain[0,...].reshape((-1, runner.chain.shape[-1]))
+
+    figure()
+    plot_psd(logpost, chain, fmin=fmin, fmax=fmax, oversampling=1)
+    savefig(op.join(dir, 'psd' + ext))
+    
+    figure()
+    plot_residuals(logpost, chain)
+    savefig(op.join(dir, 'resid' + ext))
+
+    figure()
+    plot_resid_distribution(logpost, chain)
+    savefig(op.join(dir, 'resid-distr' + ext))
+
+    figure()
+    plot_resid_acf(logpost, chain)
+    savefig(op.join(dir, 'resid-acf' + ext))
+
+    figure()
+    plot_evidence_integrand(runner, fburnin=1.0/6.0)
+    savefig(op.join(dir, 'ev' + ext))
+
+    figure()
+    plot_prediction(logpost, chain)
+    savefig(op.join(dir, 'pred' + ext))
+
+    figure()
+    plot_simulation_psd(logpost, chain, fmin=fmin, fmax=fmax, oversampling=oversampling)
+    savefig(op.join(dir, 'sim-psd' + ext))

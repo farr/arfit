@@ -63,7 +63,7 @@ def normalised_lombscargle(ts, ys, dys, fmin=None, fmax=None, oversampling=1):
         fmax = 1.0/(2.0*np.min(np.diff(np.sort(ts))))
 
     df = fmin/oversampling
-    N = int(round(fmax - fmin)/df)
+    N = int(round((fmax - fmin)/df))
 
     pows = LombScargleFast().fit(ts, ys, dys).score_frequency_grid(fmin, df, N)
     fs = fmin + df*np.arange(N)

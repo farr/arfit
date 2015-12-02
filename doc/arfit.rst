@@ -16,3 +16,11 @@ ARFit Package
    :members:
    :undoc-members:
    :show-inheritance:
+
+:mod:`kalman` Module
+--------------------
+
+.. automodule:: arfit.kalman
+   :members:
+   :undoc-members:
+   :show-inheritance:

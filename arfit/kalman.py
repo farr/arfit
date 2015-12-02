@@ -1,6 +1,34 @@
 import numpy as np
 
 def kalman_prediction_and_variance(ts, ys, dys, mu, sigma, ar_roots, ma_roots):
+    """Outputs the prediction of a Kalman filter implementing a CARMA
+    model and the associated prediction variance for data ``ys`` taken
+    at times ``ts`` with measurement uncertanties ``dys``.
+
+    :param ts: The sample times.
+
+    :param ys: The sample data.
+
+    :param dys: The (1-sigma) measurement uncertainties.
+
+    :param mu: The (constant) mean of the filter process.
+
+    :param sigma: The (constant) variance of the filter process.
+
+    :param ar_roots: The (possibly complex) roots describing the
+      autoregressive part of the CARMA process.
+
+    :param ma_roots: The (possibly complex) roots describing the
+      moving average part of the CARMA process.
+
+    :returns: ``(ys_pred, var_ys_pred)``, a tuple of arrays.
+      ``ys_pred[i]`` gives the predicted value of time series element
+      ``i`` given all the elements, ``j``, with ``j < i`` from the
+      filter; ``var_ys_pred[i]`` gives the variance of this
+      prediction.
+
+    """
+    
     ts = np.atleast_1d(ts)
     ys = np.atleast_1d(ys)
     dys = np.atleast_1d(dys)

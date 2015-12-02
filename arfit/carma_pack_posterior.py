@@ -173,6 +173,19 @@ class Posterior(object):
     def to_params(self, p):
         return np.atleast_1d(p).view(self.dtype).squeeze()
 
+    def parameterize(self, mu, sigma, nu, ar_roots, ma_roots=None):
+        p = self.to_params(np.zeros(self.nparams))
+
+        p['logit_mu'] = par.bounded_params(mu, low=self.mu_min, high=self.mu_max)
+        p['logit_sigma'] = par.bounded_params(sigma, low=self.sigma_min, high=self.sigma_max)
+        p['logit_nu'] = par.bounded_params(nu, low=self.nu_min, high=self.nu_max)
+
+        p['ar_roots_p'] = par.stable_polynomial_params(ar_roots, self.root_min, self.root_max)
+        if ma_roots is not None:
+            p['ma_roots_p'] = par.stable_polynomial_params(ma_roots, self.root_min, self.root_max)
+
+        return p
+    
     def deparameterize(self, p):
         p = self.to_params(p)
 
