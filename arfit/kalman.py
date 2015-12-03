@@ -42,6 +42,7 @@ def kalman_prediction_and_variance(ts, ys, dys, mu, sigma, ar_roots, ma_roots):
     ma_poly = np.poly(ma_roots)
     ma_poly = ma_poly / ma_poly[-1] # Has a 1 in the constant term
     ma_poly = ma_poly[::-1] # 1.0 + c[1]*x + c[2]*x^2 + ...
+    ma_poly = np.concatenate((ma_poly,np.zeros(p-q-1)))
 
     # Recentre
     ys = ys - mu
