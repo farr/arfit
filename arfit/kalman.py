@@ -13,7 +13,8 @@ def kalman_prediction_and_variance(ts, ys, dys, mu, sigma, ar_roots, ma_roots):
 
     :param mu: The (constant) mean of the filter process.
 
-    :param sigma: The (constant) variance of the filter process.
+    :param sigma: The (constant) standard deviation of the filter
+      process.
 
     :param ar_roots: The (possibly complex) roots describing the
       autoregressive part of the CARMA process.
@@ -55,7 +56,7 @@ def kalman_prediction_and_variance(ts, ys, dys, mu, sigma, ar_roots, ma_roots):
     btilde = np.dot(ma_poly, U)
 
     e = np.zeros(p)
-    e[-1] = sigma
+    e[-1] = sigma # This will be adjusted later....
 
     J = np.linalg.solve(U, e)
 
@@ -63,7 +64,6 @@ def kalman_prediction_and_variance(ts, ys, dys, mu, sigma, ar_roots, ma_roots):
     for l in range(p):
         for k in range(p):
             Vtilde[l,k] = -J[l]*np.conj(J[k])/(ar_roots[l] + np.conj(ar_roots[k]))
-
 
     xtilde = np.zeros(p)
     Ptilde = Vtilde.copy()
