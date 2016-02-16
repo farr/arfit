@@ -26,7 +26,7 @@ def kalman_prediction_and_variance(ts, ys, dys, mu, sigma, ar_roots, ma_roots):
       ``ys_pred[i]`` gives the predicted value of time series element
       ``i`` given all the elements, ``j``, with ``j < i`` from the
       filter; ``var_ys_pred[i]`` gives the variance of this
-      prediction.
+      prediction, incorporating the quoted observational uncertainty.
 
     """
     
