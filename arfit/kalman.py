@@ -1,6 +1,71 @@
 import numpy as np
 import warnings
 
+def choldowndate(L, x):
+    r"""From https://en.wikipedia.org/wiki/Cholesky_decomposition .
+    Updates the Cholesky decomposition ``L`` with a rank-one change to
+    the base matrix:
+
+    ..math ::
+
+      A \to A' = A - x \otimes x
+
+    with 
+
+    ..math::
+    
+      L \to L' = \mathrm{choldowndate}(L, x)
+
+    so that 
+
+    ..math::
+
+      A = L L^T
+
+    and 
+
+    ..math::
+
+      A' = L' \left( L' \right)^T
+
+    If the downdate does not preserve positive-definiteness of the
+    original matrix, then the corresponding terms in ``L`` will be set
+    to exactly zero.
+
+    :param L: A lower triangular matrix that is the Cholesky
+      decomposition of some positive definite matrix ``A``.
+
+    :param x: The vector giving the rank-one downdate to ``A``.
+
+    :return: ``Lprime`` giving the Cholesky decomposition of :math:`A
+      - x \otimes x`
+
+    """
+
+    L = np.atleast_2d(L)
+    x = np.atleast_1d(x)
+
+    L = L.copy()
+    x = x.copy()
+
+    n = x.shape[0]
+
+    for k in range(n):
+        r2 = L[k,k]*L[k,k] - x[k]*x[k]
+        if r2 < 0.0:
+            r2 = 0.0
+        r = np.sqrt(r2)
+
+        c = r / L[k,k]
+
+        s = x[k] / L[k,k]
+
+        L[k,k] = r
+        L[k+1:n,k] = (L[k+1:n,k] - s*x[k+1:n])/c
+        x[k+1:n] = c*x[k+1:n] - s*L[k+1:n,k]
+
+    return L
+
 def kalman_prediction_and_variance(ts, ys, dys, mu, sigma, ar_roots, ma_roots):
     """Outputs the prediction of a Kalman filter implementing a CARMA
     model and the associated prediction variance for data ``ys`` taken
@@ -69,9 +134,8 @@ def kalman_prediction_and_variance(ts, ys, dys, mu, sigma, ar_roots, ma_roots):
 
     xtilde = np.zeros(p)
     Ptilde = Vtilde.copy()
-
-    idd = np.eye(Ptilde.shape[0])
-
+    Ltilde = np.linalg.cholesky(Ptilde)
+    
     # Here we adjust the variance matrix so that the variance of the
     # process is sigma*sigma
     R0 = np.dot(btilde, np.dot(Ptilde, np.conj(btilde)))
@@ -85,36 +149,25 @@ def kalman_prediction_and_variance(ts, ys, dys, mu, sigma, ar_roots, ma_roots):
     gain = np.dot(Ptilde, np.conj(btilde)) / vys[0]
 
     xtilde = xtilde + ys[0]*gain
-    ptfac = idd - np.outer(gain, btilde)
-    Ptilde = np.dot(ptfac, np.dot(Ptilde, ptfac.T)) + dys[0]*dys[0]*np.outer(gain, np.conj(gain))
+    Ltilde = choldowndate(Ltilde, np.sqrt(vys[0])*gain)
+    Ptilde = np.dot(Ltilde, Ltilde.T)
 
-    eigs = np.linalg.eigvalsh(Ptilde)
-    if np.any(eigs <= 0):
-        warnings.warn('Ptidle may have become non-positive-definite.')
-    
     for i in range(1, ys.shape[0]):
         dt = ts[i] - ts[i-1]
         Lambda = np.diag(np.exp(ar_roots*dt))
 
         xtilde = np.dot(Lambda, xtilde)
         Ptilde = np.dot(Lambda, np.dot(Ptilde - Vtilde, np.conj(Lambda.T))) + Vtilde
-
-        eigs = np.linalg.eigvalsh(Ptilde)
-        if np.any(eigs <= 0):
-            warnings.warn('Ptidle may have become non-positive-definite.')
-
+        Ltilde = np.linalg.cholesky(Ptilde)
+        
         eys.append(np.dot(btilde, xtilde))
         vys.append(np.dot(btilde, np.dot(Ptilde, np.conj(btilde))) + dys[i]*dys[i])
 
         gain = np.dot(Ptilde, np.conj(btilde))/vys[i]
 
         xtilde = xtilde + (ys[i] - eys[i])*gain
-        ptfac = idd - np.outer(gain, btilde)
-        Ptilde = np.dot(ptfac, np.dot(Ptilde, ptfac.T)) + dys[i]*dys[i]*np.outer(gain, np.conj(gain))
-
-        eigs = np.linalg.eigvalsh(Ptilde)
-        if np.any(eigs <= 0):
-            warnings.warn('Ptidle may have become non-positive-definite.')
+        Ltilde = choldowndate(Ltilde, np.sqrt(vys[i])*gain)
+        Ptilde = np.dot(Ltilde, Ltilde.T)
         
     eys = np.real(np.array(eys))
     vys = np.real(np.array(vys))
