@@ -84,6 +84,9 @@ def kalman_prediction_and_variance(ts, ys, dys, mu, sigma, ar_roots, ma_roots):
     xtilde = xtilde + ys[0]*gain
     Ptilde = Ptilde - vys[0]*np.outer(gain, np.conj(gain))
 
+    eigs = np.linalg.eigvalsh(Ptilde)
+    assert np.all(eigs > 0), 'Ptilde has become non-positive-definite'
+    
     for i in range(1, ys.shape[0]):
         dt = ts[i] - ts[i-1]
         Lambda = np.diag(np.exp(ar_roots*dt))
@@ -91,14 +94,20 @@ def kalman_prediction_and_variance(ts, ys, dys, mu, sigma, ar_roots, ma_roots):
         xtilde = np.dot(Lambda, xtilde)
         Ptilde = np.dot(Lambda, np.dot(Ptilde - Vtilde, np.conj(Lambda.T))) + Vtilde
 
+        eigs = np.linalg.eigvalsh(Ptilde)
+        assert np.all(eigs > 0), 'Ptilde has become non-positive-definite'
+
         eys.append(np.dot(btilde, xtilde))
         vys.append(np.dot(btilde, np.dot(Ptilde, np.conj(btilde))) + dys[i]*dys[i])
 
         gain = np.dot(Ptilde, np.conj(btilde))/vys[i]
 
         xtilde = xtilde + (ys[i] - eys[i])*gain
-        Ptilde = Ptilde - vys[i]*np.outer(gain, np.conj(gain))
+        Ptilde = Ptilde - vys[i]*np.outer(gain, np.conj(gain)) 
 
+        eigs = np.linalg.eigvalsh(Ptilde)
+        assert np.all(eigs > 0), 'Ptilde has become non-positive-definite'
+        
     eys = np.real(np.array(eys))
     vys = np.real(np.array(vys))
         
