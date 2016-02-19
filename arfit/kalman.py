@@ -1,5 +1,4 @@
 import numpy as np
-import warnings
 
 def kalman_prediction_and_variance(ts, ys, dys, mu, sigma, ar_roots, ma_roots):
     """Outputs the prediction of a Kalman filter implementing a CARMA
@@ -86,8 +85,7 @@ def kalman_prediction_and_variance(ts, ys, dys, mu, sigma, ar_roots, ma_roots):
     Ptilde = Ptilde - vys[0]*np.outer(gain, np.conj(gain))
 
     eigs = np.linalg.eigvalsh(Ptilde)
-    if np.any(eigs <= 0):
-        warnings.warn('Ptidle may have become non-positive-definite.')
+    assert np.all(eigs > 0), 'Ptilde has become non-positive-definite'
     
     for i in range(1, ys.shape[0]):
         dt = ts[i] - ts[i-1]
@@ -97,8 +95,7 @@ def kalman_prediction_and_variance(ts, ys, dys, mu, sigma, ar_roots, ma_roots):
         Ptilde = np.dot(Lambda, np.dot(Ptilde - Vtilde, np.conj(Lambda.T))) + Vtilde
 
         eigs = np.linalg.eigvalsh(Ptilde)
-        if np.any(eigs <= 0):
-            warnings.warn('Ptidle may have become non-positive-definite.')
+        assert np.all(eigs > 0), 'Ptilde has become non-positive-definite'
 
         eys.append(np.dot(btilde, xtilde))
         vys.append(np.dot(btilde, np.dot(Ptilde, np.conj(btilde))) + dys[i]*dys[i])
@@ -109,8 +106,7 @@ def kalman_prediction_and_variance(ts, ys, dys, mu, sigma, ar_roots, ma_roots):
         Ptilde = Ptilde - vys[i]*np.outer(gain, np.conj(gain)) 
 
         eigs = np.linalg.eigvalsh(Ptilde)
-        if np.any(eigs <= 0):
-            warnings.warn('Ptidle may have become non-positive-definite.')
+        assert np.all(eigs > 0), 'Ptilde has become non-positive-definite'
         
     eys = np.real(np.array(eys))
     vys = np.real(np.array(vys))
