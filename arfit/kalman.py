@@ -70,8 +70,6 @@ def kalman_prediction_and_variance(ts, ys, dys, mu, sigma, ar_roots, ma_roots):
     xtilde = np.zeros(p)
     Ptilde = Vtilde.copy()
 
-    idd = np.eye(Ptilde.shape[0])
-
     # Here we adjust the variance matrix so that the variance of the
     # process is sigma*sigma
     R0 = np.dot(btilde, np.dot(Ptilde, np.conj(btilde)))
@@ -85,7 +83,7 @@ def kalman_prediction_and_variance(ts, ys, dys, mu, sigma, ar_roots, ma_roots):
     gain = np.dot(Ptilde, np.conj(btilde)) / vys[0]
 
     xtilde = xtilde + ys[0]*gain
-    Ptilde = np.dot(idd - np.outer(gain, btilde), Ptilde)
+    Ptilde = Ptilde - vys[0]*np.outer(gain, np.conj(gain))
 
     eigs = np.linalg.eigvalsh(Ptilde)
     if np.any(eigs <= 0):
@@ -108,7 +106,7 @@ def kalman_prediction_and_variance(ts, ys, dys, mu, sigma, ar_roots, ma_roots):
         gain = np.dot(Ptilde, np.conj(btilde))/vys[i]
 
         xtilde = xtilde + (ys[i] - eys[i])*gain
-        Ptilde = np.dot(idd - np.outer(gain, btilde), Ptilde)
+        Ptilde = Ptilde - vys[i]*np.outer(gain, np.conj(gain)) 
 
         eigs = np.linalg.eigvalsh(Ptilde)
         if np.any(eigs <= 0):
