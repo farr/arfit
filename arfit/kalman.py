@@ -85,8 +85,7 @@ def kalman_prediction_and_variance(ts, ys, dys, mu, sigma, ar_roots, ma_roots):
     gain = np.dot(Ptilde, np.conj(btilde)) / vys[0]
 
     xtilde = xtilde + ys[0]*gain
-    ptfac = idd - np.outer(gain, btilde)
-    Ptilde = np.dot(ptfac, np.dot(Ptilde, ptfac.T)) + dys[0]*dys[0]*np.outer(gain, np.conj(gain))
+    Ptilde = np.dot(idd - np.outer(gain, btilde), Ptilde)
 
     eigs = np.linalg.eigvalsh(Ptilde)
     if np.any(eigs <= 0):
@@ -109,8 +108,7 @@ def kalman_prediction_and_variance(ts, ys, dys, mu, sigma, ar_roots, ma_roots):
         gain = np.dot(Ptilde, np.conj(btilde))/vys[i]
 
         xtilde = xtilde + (ys[i] - eys[i])*gain
-        ptfac = idd - np.outer(gain, btilde)
-        Ptilde = np.dot(ptfac, np.dot(Ptilde, ptfac.T)) + dys[i]*dys[i]*np.outer(gain, np.conj(gain))
+        Ptilde = np.dot(idd - np.outer(gain, btilde), Ptilde)
 
         eigs = np.linalg.eigvalsh(Ptilde)
         if np.any(eigs <= 0):
